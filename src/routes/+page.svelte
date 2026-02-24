@@ -1,0 +1,677 @@
+<script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
+	import type { DiagramFile } from '$lib/types/diagram';
+	import DiagramEditor from '$lib/components/editor/DiagramEditor.svelte';
+	import EditorToolbar from '$lib/components/editor/EditorToolbar.svelte';
+	import NodePalette from '$lib/components/editor/NodePalette.svelte';
+	import FileExplorer from '$lib/components/editor/FileExplorer.svelte';
+	import PropertiesPanel from '$lib/components/editor/PropertiesPanel.svelte';
+	import ShapeLibrary from '$lib/components/editor/ShapeLibrary.svelte';
+	import { FolderOpen, HardDrive, Files, Shapes, BookOpen } from 'lucide-svelte';
+	import {
+		addNode,
+		removeNodes,
+		removeEdges,
+		groupNodes,
+		ungroupNodes,
+		nodeList,
+		edgeList,
+		diagramMeta,
+		isDirty,
+		saveStatus,
+		nodes,
+		edges,
+		registerOnMutation,
+		unregisterOnMutation,
+		notifyMutation
+	} from '$lib/stores/diagramStore';
+	import {
+		selectedNodeIds,
+		selectedEdgeIds,
+		selectNodes,
+		clearSelection
+	} from '$lib/stores/selectionStore';
+	import { viewport, setViewport } from '$lib/stores/viewportStore';
+	import { pushHistory, pushSnapshot, undo, redo, clearHistory } from '$lib/stores/historyStore';
+	import { copySelected, paste } from '$lib/stores/clipboardStore';
+	import { autoLayout, type LayoutDirection } from '$lib/engine/layout';
+	import { exportJson, importDiagramFile } from '$lib/engine/export';
+	import {
+		readDiagramFile,
+		writeDiagramFile,
+		createEmptyDiagram,
+		watchFile,
+		watchDirectory,
+		isFileSystemAccessSupported,
+		withWriteLock,
+		type FileWatcher,
+		type DirectoryWatcher
+	} from '$lib/engine/fs-access';
+	import { cacheDiagram, getCachedDiagram, markFsSynced } from '$lib/engine/idb-cache';
+	import {
+		directoryHandle,
+		workspaceReady,
+		restoreWorkspace,
+		openWorkspace
+	} from '$lib/stores/workspaceStore';
+	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
+	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
+	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
+
+	let loading = $state(true);
+	let activeFile = $state<string>('');
+	let syncStatus = $state<'connected' | 'disconnected' | 'syncing'>('disconnected');
+	let externalChangeToast = $state(false);
+	let fileWatcher: FileWatcher | null = null;
+	let dirWatcher: DirectoryWatcher | null = null;
+	let fileExplorerRef: FileExplorer | undefined = $state();
+	let editorRef: DiagramEditor | undefined = $state();
+	let savePending = false;
+	let createdAt = $state('');
+	let showJsonEditor = $state(false);
+
+	// ── Autosave: direct callback from mutations ──────────────────────
+	// No $effect, no subscriptions, no reactivity.
+	// diagramStore mutation functions call scheduleSave() directly.
+
+	let saveTimer: ReturnType<typeof setTimeout> | undefined;
+	const SAVE_DEBOUNCE = 500;
+
+	function scheduleSave() {
+		if (!activeFile) return;
+		savePending = true;
+		clearTimeout(saveTimer);
+		saveTimer = setTimeout(performSave, SAVE_DEBOUNCE);
+	}
+
+	// ── Lifecycle ──────────────────────────────────────────────────────
+
+	onMount(async () => {
+		registerOnMutation(scheduleSave);
+		await restoreWorkspace(false);
+		loading = false;
+	});
+
+	onDestroy(() => {
+		unregisterOnMutation();
+		clearTimeout(saveTimer);
+		fileWatcher?.stop();
+		dirWatcher?.stop();
+	});
+
+	// When workspace becomes ready, auto-open first file or create Untitled
+	$effect(() => {
+		if ($workspaceReady && $directoryHandle && !activeFile) {
+			autoOpenFile();
+		}
+	});
+
+	// Directory watcher: auto-refresh file explorer on external file additions/deletions
+	$effect(() => {
+		if ($workspaceReady && $directoryHandle) {
+			dirWatcher?.stop();
+			let debounceTimer: ReturnType<typeof setTimeout>;
+			dirWatcher = watchDirectory($directoryHandle, () => {
+				clearTimeout(debounceTimer);
+				debounceTimer = setTimeout(() => fileExplorerRef?.refresh(), 300);
+			});
+		}
+	});
+
+	async function autoOpenFile() {
+		if (!$directoryHandle) return;
+		const { listEntries } = await import('$lib/engine/fs-access');
+		const entries = await listEntries($directoryHandle);
+		const firstFile = entries.find((e) => e.kind === 'file');
+		if (firstFile) {
+			await openFile(firstFile.name);
+		} else {
+			const diagram = createEmptyDiagram('Untitled');
+			const fileName = 'Untitled.json';
+			await writeDiagramFile($directoryHandle, fileName, diagram);
+			fileExplorerRef?.refresh();
+			await openFile(fileName);
+		}
+	}
+
+	// ── File open / load ───────────────────────────────────────────────
+
+	async function openFile(fileName: string) {
+		if (!$directoryHandle) return;
+
+		fileWatcher?.stop();
+		fileWatcher = null;
+		syncStatus = 'disconnected';
+
+		let dirHandle = $directoryHandle;
+		let actualFileName = fileName;
+		if (fileName.includes('/')) {
+			const parts = fileName.split('/');
+			actualFileName = parts.pop()!;
+			for (const part of parts) {
+				dirHandle = await dirHandle.getDirectoryHandle(part);
+			}
+		}
+
+		let diagram = await readDiagramFile(dirHandle, actualFileName);
+
+		// Crash recovery: check if IDB has unsaved data newer than last FS sync
+		const cached = await getCachedDiagram(fileName);
+		if (cached && cached.modifiedAt > cached.fsSyncedAt && diagram) {
+			if (cached.diagram.version > diagram.version) {
+				diagram = cached.diagram;
+				// Flush recovered IDB data to filesystem
+				flushToFs(fileName, diagram, dirHandle);
+			}
+		}
+
+		if (!diagram) return;
+
+		activeFile = fileName;
+		loadDiagramFlat(diagram);
+		clearHistory();
+		await cacheDiagram(fileName, diagram);
+		console.log(`[DiagramStudio] Opened: ${fileName} — ${diagram.nodes.length} nodes`);
+		// Restore saved viewport — also update the store so future saves don't overwrite it
+		if (diagram.viewport && (diagram.viewport.x !== 0 || diagram.viewport.y !== 0 || diagram.viewport.zoom !== 1)) {
+			setViewport(diagram.viewport);
+			requestAnimationFrame(() => editorRef?.restoreViewport(diagram.viewport));
+		} else {
+			requestAnimationFrame(() => editorRef?.fitView());
+		}
+
+		// Start file watcher
+		fileWatcher = watchFile(
+			dirHandle,
+			actualFileName,
+			(updated) => {
+				if (savePending) return;
+				// Don't load older versions on top of current state
+				const meta = get(diagramMeta);
+				if (meta && updated.version <= meta.version) return;
+				syncStatus = 'syncing';
+				loadDiagramFlat(updated);
+				cacheDiagram(fileName, updated);
+				syncStatus = 'connected';
+				showExternalChangeToast();
+				console.log(`[DiagramStudio] External change: ${fileName}`);
+			},
+			1000
+		);
+		syncStatus = 'connected';
+	}
+
+	function loadDiagramFlat(diagram: DiagramFile) {
+		const nodeMap = new Map();
+		for (const n of diagram.nodes) nodeMap.set(n.id, n);
+		nodes.set(nodeMap);
+
+		const edgeMap = new Map();
+		for (const e of diagram.edges) edgeMap.set(e.id, e);
+		edges.set(edgeMap);
+
+		diagramMeta.set({
+			id: diagram.id,
+			name: diagram.name,
+			description: diagram.description,
+			diagramType: diagram.diagramType,
+			version: diagram.version,
+			metadata: diagram.metadata
+		});
+
+		createdAt = diagram.createdAt || '';
+		isDirty.set(false);
+		savePending = false;
+		saveStatus.set('saved');
+	}
+
+	function showExternalChangeToast() {
+		externalChangeToast = true;
+		setTimeout(() => (externalChangeToast = false), 3000);
+	}
+
+	// ── Workspace ──────────────────────────────────────────────────────
+
+	async function handleOpenWorkspace() {
+		const opened = await openWorkspace();
+		if (opened) handleWorkspaceChanged();
+	}
+
+	function handleWorkspaceChanged() {
+		activeFile = '';
+		fileWatcher?.stop();
+		fileWatcher = null;
+		dirWatcher?.stop();
+		dirWatcher = null;
+		syncStatus = 'disconnected';
+		nodes.set(new Map());
+		edges.set(new Map());
+		diagramMeta.set(null);
+	}
+
+	// ── Save pipeline ──────────────────────────────────────────────────
+
+	function buildDiagramFile(): DiagramFile | null {
+		const meta = get(diagramMeta);
+		const currentNodes = Array.from(get(nodes).values());
+		const currentEdges = Array.from(get(edges).values());
+		const vp = get(viewport);
+
+		if (!meta) return null;
+
+		return {
+			$schema: 'diagram-studio/diagram-v1',
+			id: meta.id,
+			name: meta.name,
+			description: meta.description,
+			diagramType: meta.diagramType,
+			version: meta.version + 1,
+			createdAt: createdAt || new Date().toISOString(),
+			modifiedAt: new Date().toISOString(),
+			viewport: vp,
+			nodes: currentNodes,
+			edges: currentEdges,
+			metadata: meta.metadata
+		};
+	}
+
+	async function performSave() {
+		const file = activeFile;
+		const dirHandleVal = get(directoryHandle);
+
+		if (!file || !dirHandleVal) {
+			savePending = false;
+			return;
+		}
+
+		saveStatus.set('saving');
+		const diagram = buildDiagramFile();
+		if (!diagram) { savePending = false; return; }
+
+		// Also update diagramMeta version so watcher version check works
+		diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
+
+		// Phase 1: IDB write (~1-3ms)
+		try {
+			await cacheDiagram(file, diagram);
+		} catch {
+			// IDB failure is non-fatal
+		}
+
+		isDirty.set(false);
+		saveStatus.set('saved');
+
+		// Phase 2: Filesystem write — savePending stays true until this completes
+		await flushToFs(file, diagram, dirHandleVal);
+		savePending = false;
+	}
+
+	async function flushToFs(file: string, diagram: DiagramFile, dirHandleVal: FileSystemDirectoryHandle) {
+		try {
+			await withWriteLock(async () => {
+				fileWatcher?.markSelfWrite();
+
+				let dirHandle = dirHandleVal;
+				let actualFileName = file;
+				if (file.includes('/')) {
+					const parts = file.split('/');
+					actualFileName = parts.pop()!;
+					for (const part of parts) {
+						dirHandle = await dirHandle.getDirectoryHandle(part);
+					}
+				}
+
+				await writeDiagramFile(dirHandle, actualFileName, diagram);
+			});
+			await markFsSynced(file);
+		} catch {
+			// Retry once after 2s
+			savePending = true;
+			setTimeout(async () => {
+				try {
+					fileWatcher?.markSelfWrite();
+					await writeDiagramFile(dirHandleVal, file, diagram);
+					await markFsSynced(file);
+				} catch { /* give up */ }
+				savePending = false;
+			}, 2000);
+		}
+	}
+
+	async function handleSave() {
+		savePending = true;
+		clearTimeout(saveTimer);
+		await performSave();
+	}
+
+	// ── Editor actions ─────────────────────────────────────────────────
+
+	function handleDrop(type: string, position: { x: number; y: number }) {
+		// Capture pre-mutation state synchronously, then add the node immediately.
+		// Defer the undo-stack push to after the frame so the node renders first.
+		const snap = {
+			nodes: new Map(get(nodes)),
+			edges: new Map(get(edges))
+		};
+		addNode(type, position);
+		requestAnimationFrame(() => pushSnapshot(snap));
+	}
+
+	function handleAutoLayout(direction: LayoutDirection) {
+		if ($nodeList.length === 0) return;
+		pushHistory();
+		const laid = autoLayout($nodeList, $edgeList, direction);
+		const nodeMap = new Map<string, import('$lib/types/diagram').DiagramNode>();
+		for (const n of laid) nodeMap.set(n.id, n);
+		nodes.set(nodeMap);
+		notifyMutation();
+	}
+
+	async function handleImport() {
+		const imported = await importDiagramFile();
+		if (!imported || !$diagramMeta) return;
+		pushHistory();
+		const nodeMap = new Map<string, import('$lib/types/diagram').DiagramNode>();
+		for (const n of imported.nodes) nodeMap.set(n.id, n);
+		nodes.set(nodeMap);
+
+		const edgeMap = new Map<string, import('$lib/types/diagram').DiagramEdge>();
+		for (const e of imported.edges) edgeMap.set(e.id, e);
+		edges.set(edgeMap);
+		notifyMutation();
+	}
+
+	function handleExport() {
+		const diagram = buildDiagramFile();
+		if (diagram) exportJson(diagram);
+	}
+
+	function handleDeleteSelected() {
+		const nodeIds = Array.from($selectedNodeIds);
+		const edgeIds = Array.from($selectedEdgeIds);
+		if (nodeIds.length === 0 && edgeIds.length === 0) return;
+		pushHistory();
+		if (nodeIds.length > 0) removeNodes(nodeIds);
+		if (edgeIds.length > 0) removeEdges(edgeIds);
+		clearSelection();
+	}
+
+	function handleSelectAll() {
+		selectNodes($nodeList.map((n) => n.id));
+	}
+
+	function handleGroup() {
+		const ids = Array.from(get(selectedNodeIds));
+		console.log('[DiagramStudio] Group requested:', ids.length, 'nodes selected');
+		if (ids.length < 2) return;
+		pushHistory();
+		const groupId = groupNodes(ids);
+		if (groupId) {
+			clearSelection();
+			console.log('[DiagramStudio] Grouped into:', groupId);
+		}
+	}
+
+	function handleUngroup() {
+		const ids = Array.from(get(selectedNodeIds));
+		const currentNodes = get(nodes);
+		// Find group nodes among selection, or find parent group of selected child
+		for (const id of ids) {
+			const node = currentNodes.get(id);
+			if (node?.type === 'group') {
+				pushHistory();
+				ungroupNodes(id);
+				clearSelection();
+				return;
+			}
+			// If a child node is selected, ungroup its parent
+			if (node?.parentId) {
+				pushHistory();
+				ungroupNodes(node.parentId);
+				clearSelection();
+				return;
+			}
+		}
+	}
+
+	function getJsonEditorValue(): string {
+		const diagram = buildDiagramFile();
+		if (!diagram) return '{}';
+		return JSON.stringify(diagram, null, 2);
+	}
+
+	function handleJsonEditorSave(jsonStr: string) {
+		try {
+			const diagram = JSON.parse(jsonStr) as DiagramFile;
+			loadDiagramFlat(diagram);
+			notifyMutation();
+		} catch {
+			// Invalid JSON, ignore
+		}
+	}
+
+	function handleFileSelect(fileName: string) {
+		showJsonEditor = false;
+		openFile(fileName);
+	}
+
+	function handleFileCreated(fileName: string) {
+		openFile(fileName);
+	}
+
+	function handleFileDeleted(fileName: string) {
+		if (activeFile === fileName) {
+			activeFile = '';
+			nodes.set(new Map());
+			edges.set(new Map());
+			diagramMeta.set(null);
+			fileWatcher?.stop();
+			fileWatcher = null;
+			syncStatus = 'disconnected';
+			autoOpenFile();
+		}
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		const mod = e.metaKey || e.ctrlKey;
+		const tag = (e.target as HTMLElement)?.tagName;
+		const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+		// Allow modifier shortcuts (Cmd+S, Cmd+G, etc.) even when an input has focus.
+		// Only block non-modifier keys (Delete, Backspace, Escape) inside inputs.
+		if (inInput && !mod) return;
+
+		if (mod && e.key === 's') {
+			e.preventDefault();
+			handleSave();
+		} else if (mod && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+			e.preventDefault();
+			redo();
+		} else if (mod && e.key === 'z') {
+			e.preventDefault();
+			undo();
+		} else if (mod && e.key === 'y') {
+			e.preventDefault();
+			redo();
+		} else if (mod && e.key === 'c') {
+			e.preventDefault();
+			copySelected();
+		} else if (mod && e.key === 'v') {
+			e.preventDefault();
+			pushHistory();
+			paste();
+		} else if (mod && e.shiftKey && (e.key === 'g' || e.key === 'G')) {
+			e.preventDefault();
+			handleUngroup();
+		} else if (mod && e.key === 'g') {
+			e.preventDefault();
+			handleGroup();
+		} else if (mod && e.key === 'a') {
+			e.preventDefault();
+			handleSelectAll();
+		} else if (e.key === 'Delete' || e.key === 'Backspace') {
+			e.preventDefault();
+			handleDeleteSelected();
+		} else if (e.key === 'Escape') {
+			clearSelection();
+		}
+	}
+</script>
+
+<svelte:head>
+	<title>{$diagramMeta?.name ?? 'Diagram Studio'}</title>
+</svelte:head>
+
+<svelte:window onkeydown={handleKeydown} />
+
+{#if loading}
+	<!-- Loading -->
+{:else if !$workspaceReady}
+	<!-- Workspace picker -->
+	<div class="flex h-screen items-center justify-center" style="background: var(--color-bg-primary);">
+		<div class="max-w-md text-center">
+			<div
+				class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
+				style="background: var(--color-accent-light); color: var(--color-accent);"
+			>
+				<HardDrive size={32} />
+			</div>
+			<h1 class="mb-2 text-2xl font-bold" style="color: var(--color-text-primary);">
+				Diagram Studio
+			</h1>
+			<p class="mb-8 text-sm" style="color: var(--color-text-tertiary);">
+				Choose a folder to store your diagrams. The app reads and writes JSON files directly — AI tools can edit the same files and changes sync automatically.
+			</p>
+			<button
+				onclick={handleOpenWorkspace}
+				class="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors"
+				style="background: var(--color-accent);"
+			>
+				<FolderOpen size={18} />
+				Open Folder
+			</button>
+			{#if !isFileSystemAccessSupported()}
+				<p class="mt-4 text-xs" style="color: var(--color-error-text);">
+					Your browser doesn't support the File System Access API. Use Chrome, Edge, or Opera.
+				</p>
+			{/if}
+		</div>
+	</div>
+{:else}
+	<!-- Editor -->
+
+	<div class="flex h-screen flex-col">
+		<EditorToolbar
+			diagramName={$diagramMeta?.name ?? 'Untitled'}
+			diagramType={$diagramMeta?.diagramType ?? 'flowchart'}
+			{syncStatus}
+			{showJsonEditor}
+			onSave={handleSave}
+			onImport={handleImport}
+			onExport={handleExport}
+			onAutoLayout={handleAutoLayout}
+			onUndo={() => undo()}
+			onRedo={() => redo()}
+			onWorkspaceChanged={handleWorkspaceChanged}
+			onToggleJsonEditor={() => { showJsonEditor = !showJsonEditor; }}
+		/>
+
+		<div class="flex flex-1 overflow-hidden">
+			<!-- Left sidebar with tabs -->
+			{#if $leftPanelOpen}
+				<div
+					data-panel="left"
+					class="flex shrink-0 flex-col overflow-hidden"
+					style="width: {$leftPanelWidth}px; background: var(--color-bg-surface); border-right: 1px solid var(--color-border-primary);"
+				>
+					<!-- Tab bar -->
+					<div class="flex border-b" style="border-color: var(--color-border-subtle);">
+						<button
+							onclick={() => activeTab.set('files')}
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors"
+							style="
+								color: {$activeTab === 'files' ? 'var(--color-accent)' : 'var(--color-text-muted)'};
+								border-bottom: 2px solid {$activeTab === 'files' ? 'var(--color-accent)' : 'transparent'};
+							"
+						>
+							<Files size={12} />
+							Files
+						</button>
+						<button
+							onclick={() => activeTab.set('nodes')}
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors"
+							style="
+								color: {$activeTab === 'nodes' ? 'var(--color-accent)' : 'var(--color-text-muted)'};
+								border-bottom: 2px solid {$activeTab === 'nodes' ? 'var(--color-accent)' : 'transparent'};
+							"
+						>
+							<Shapes size={12} />
+							Nodes
+						</button>
+						<button
+							onclick={() => activeTab.set('library')}
+							class="flex flex-1 items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium transition-colors"
+							style="
+								color: {$activeTab === 'library' ? 'var(--color-accent)' : 'var(--color-text-muted)'};
+								border-bottom: 2px solid {$activeTab === 'library' ? 'var(--color-accent)' : 'transparent'};
+							"
+						>
+							<BookOpen size={12} />
+							Library
+						</button>
+					</div>
+
+					<!-- Tab content -->
+					{#if $activeTab === 'files'}
+						<FileExplorer
+							bind:this={fileExplorerRef}
+							{activeFile}
+							onFileSelect={handleFileSelect}
+							onFileCreated={handleFileCreated}
+							onFileDeleted={handleFileDeleted}
+						/>
+					{:else if $activeTab === 'nodes'}
+						<NodePalette />
+					{:else}
+						<ShapeLibrary />
+					{/if}
+				</div>
+
+				<!-- Left resize handle -->
+				<ResizeHandle side="left" width={$leftPanelWidth} onResize={(w) => leftPanelWidth.set(w)} />
+			{/if}
+
+			<div class="relative flex-1 overflow-hidden">
+				{#if showJsonEditor}
+					<JsonEditor
+						value={getJsonEditorValue()}
+						fileName={activeFile}
+						onSave={handleJsonEditorSave}
+						onClose={() => { showJsonEditor = false; }}
+					/>
+				{:else}
+					<DiagramEditor bind:this={editorRef} onDrop={handleDrop} />
+				{/if}
+			</div>
+
+			<!-- Right resize handle -->
+			{#if $rightPanelOpen}
+				<ResizeHandle side="right" width={$rightPanelWidth} onResize={(w) => rightPanelWidth.set(w)} />
+			{/if}
+
+			<PropertiesPanel />
+		</div>
+
+		<!-- External change toast -->
+		{#if externalChangeToast}
+			<div
+				class="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm shadow-lg"
+				style="background: var(--color-bg-surface); border-color: var(--color-accent); color: var(--color-text-primary);"
+			>
+				<div class="h-2 w-2 rounded-full" style="background: var(--color-accent);"></div>
+				Diagram updated from external changes
+			</div>
+		{/if}
+	</div>
+{/if}
