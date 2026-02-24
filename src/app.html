@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" style="background:#f5f6fa">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Diagram Studio</title>
+		<meta name="description" content="AI-collaborative diagramming and flowcharting tool" />
+		<link rel="icon" type="image/x-icon" href="%sveltekit.assets%/favicon.ico" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<script>
+			(function() {
+				var t = localStorage.getItem('diagram-studio-theme');
+				var bg = {light:'#f5f6fa',dark:'#121218',midnight:'#0a1628'};
+				if (!t && window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+				if (t === 'dark' || t === 'midnight') {
+					document.documentElement.setAttribute('data-theme', t);
+				}
+				if (t && bg[t]) {
+					document.documentElement.style.background = bg[t];
+				}
+				// Sidebar panel state — set data attributes so CSS can hide before hydration
+				var lp = localStorage.getItem('diagram-studio-left-panel');
+				document.documentElement.setAttribute('data-left-panel', lp === 'false' ? 'closed' : 'open');
+				var rp = localStorage.getItem('diagram-studio-right-panel');
+				document.documentElement.setAttribute('data-right-panel', rp === 'false' ? 'closed' : 'open');
+			})();
+		</script>
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
