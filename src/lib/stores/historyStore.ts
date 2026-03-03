@@ -3,6 +3,13 @@ import { nodes, edges, isDirty, saveStatus } from './diagramStore';
 import type { DiagramNode, DiagramEdge } from '$lib/types/diagram';
 import { HISTORY_MAX_SIZE } from '$lib/constants';
 
+// ── Post-undo/redo callback ───────────────────────────────────────
+// Page registers a callback so undo/redo can trigger a save without
+// going through notifyMutation (which causes cascading saves).
+let _onHistoryChange: (() => void) | null = null;
+export function registerOnHistoryChange(cb: () => void) { _onHistoryChange = cb; }
+export function unregisterOnHistoryChange() { _onHistoryChange = null; }
+
 interface HistoryEntry {
 	nodes: Map<string, DiagramNode>;
 	edges: Map<string, DiagramEdge>;
@@ -59,6 +66,7 @@ export function undo(): void {
 	edges.set(prev.edges);
 	isDirty.set(true);
 	saveStatus.set('unsaved');
+	_onHistoryChange?.();
 }
 
 export function redo(): void {
@@ -77,6 +85,7 @@ export function redo(): void {
 	edges.set(next.edges);
 	isDirty.set(true);
 	saveStatus.set('unsaved');
+	_onHistoryChange?.();
 }
 
 export function clearHistory(): void {

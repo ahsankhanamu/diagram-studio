@@ -33,7 +33,7 @@
 		clearSelection
 	} from '$lib/stores/selectionStore';
 	import { viewport, setViewport } from '$lib/stores/viewportStore';
-	import { pushHistory, pushSnapshot, undo, redo, clearHistory } from '$lib/stores/historyStore';
+	import { pushHistory, pushSnapshot, undo, redo, clearHistory, registerOnHistoryChange, unregisterOnHistoryChange } from '$lib/stores/historyStore';
 	import { copySelected, paste } from '$lib/stores/clipboardStore';
 	import { autoLayout, type LayoutDirection } from '$lib/engine/layout';
 	import { exportJson, importDiagramFile } from '$lib/engine/export';
@@ -89,12 +89,14 @@
 
 	onMount(async () => {
 		registerOnMutation(scheduleSave);
+		registerOnHistoryChange(scheduleSave);
 		await restoreWorkspace(false);
 		loading = false;
 	});
 
 	onDestroy(() => {
 		unregisterOnMutation();
+		unregisterOnHistoryChange();
 		clearTimeout(saveTimer);
 		fileWatcher?.stop();
 		dirWatcher?.stop();
@@ -187,10 +189,16 @@
 			actualFileName,
 			(updated) => {
 				if (savePending) return;
-				// Don't load older versions on top of current state
+				// Skip files we wrote ourselves (version-based check)
+				if (fileWatcher?.isSelfWrittenVersion(updated.version)) return;
+				// Also skip older or same versions as a safety net
 				const meta = get(diagramMeta);
 				if (meta && updated.version <= meta.version) return;
+				// Cancel any pending save so it doesn't overwrite the external change
+				clearTimeout(saveTimer);
 				syncStatus = 'syncing';
+				// Preserve undo history: push current state so the user can undo the external change
+				pushHistory();
 				loadDiagramFlat(updated);
 				cacheDiagram(fileName, updated);
 				syncStatus = 'connected';
@@ -289,8 +297,9 @@
 		const diagram = buildDiagramFile();
 		if (!diagram) { savePending = false; return; }
 
-		// Also update diagramMeta version so watcher version check works
+		// Update diagramMeta version and mark as self-written so watcher skips it
 		diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
+		fileWatcher?.markSelfWriteVersion(diagram.version);
 
 		// Phase 1: IDB write (~1-3ms)
 		try {
@@ -499,7 +508,6 @@
 			copySelected();
 		} else if (mod && e.key === 'v') {
 			e.preventDefault();
-			pushHistory();
 			paste();
 		} else if (mod && e.shiftKey && (e.key === 'g' || e.key === 'G')) {
 			e.preventDefault();

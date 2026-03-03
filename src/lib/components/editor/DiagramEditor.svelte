@@ -18,6 +18,7 @@
 		edgeList,
 		addEdge as addEdgeToStore,
 		updateNode,
+		updateNodeSilent,
 		removeNodes,
 		removeEdges,
 		insertNodeOnEdge,
@@ -107,8 +108,19 @@
 		}
 	}
 
+	// Track whether we already captured history for the current drag gesture
+	let dragHistoryPushed = false;
+
+	function handleNodeDragStart() {
+		if (!dragHistoryPushed) {
+			pushHistory();
+			dragHistoryPushed = true;
+		}
+	}
+
 	function handleNodeDragStop({ targetNode, nodes: draggedNodes }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
 		snapGuides = [];
+		dragHistoryPushed = false;
 		// Commit all dragged node positions to our store → triggers save pipeline
 		for (const node of draggedNodes) {
 			updateNode(node.id, { position: { x: node.position.x, y: node.position.y } });
@@ -119,6 +131,15 @@
 		for (const change of changes) {
 			if (change.type === 'remove') {
 				removeNodes([change.id]);
+			} else if (change.type === 'dimensions' && change.dimensions) {
+				// Silent update — dimension auto-measurements are not user edits
+				// and should not trigger the save pipeline or pollute undo history
+				updateNodeSilent(change.id, {
+					size: {
+						width: Math.round(change.dimensions.width),
+						height: Math.round(change.dimensions.height)
+					}
+				});
 			}
 		}
 	}
@@ -144,10 +165,12 @@
 	}
 
 	function handleConnect(connection: Connection) {
+		pushHistory();
 		addEdgeToStore(connection.source, connection.target, connection.sourceHandle || 'bottom', connection.targetHandle || 'top');
 	}
 
 	function handleDelete({ nodes: deletedNodes, edges: deletedEdges }: { nodes: any[]; edges: any[] }) {
+		if (deletedNodes.length > 0 || deletedEdges.length > 0) pushHistory();
 		if (deletedNodes.length > 0) removeNodes(deletedNodes.map((n: any) => n.id));
 		if (deletedEdges.length > 0) removeEdges(deletedEdges.map((e: any) => e.id));
 	}
@@ -210,7 +233,7 @@
 		}
 
 		items.push({ label: '', action: () => {}, separator: true });
-		items.push({ label: 'Delete Node', action: () => removeNodes([node.id]) });
+		items.push({ label: 'Delete Node', action: () => { pushHistory(); removeNodes([node.id]); } });
 
 		contextMenu = { x: e.clientX, y: e.clientY, items };
 	}
@@ -227,11 +250,12 @@
 						const pos = screenToFlow
 							? screenToFlow({ x: e.clientX, y: e.clientY })
 							: { x: e.clientX, y: e.clientY };
-						insertNodeOnEdge(edge.id, 'process', pos);
+						pushHistory();
+					insertNodeOnEdge(edge.id, 'process', pos);
 					}
 				},
 				{ label: '', action: () => {}, separator: true },
-				{ label: 'Delete Edge', action: () => removeEdges([edge.id]) }
+				{ label: 'Delete Edge', action: () => { pushHistory(); removeEdges([edge.id]); } }
 			]
 		};
 	}
@@ -296,6 +320,7 @@
 			ondelete={handleDelete}
 			onselectionchange={handleSelectionChange}
 			onmoveend={handleMoveEnd}
+			onnodedragstart={handleNodeDragStart}
 			onnodedrag={handleNodeDrag}
 			onnodedragstop={handleNodeDragStop}
 			onnodecontextmenu={handleNodeContextMenu}

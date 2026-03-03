@@ -50,6 +50,12 @@
 		clearSelection();
 	}
 
+	// Capture history once when the user focuses an input field.
+	// All edits within the same focus session become a single undo step.
+	function captureHistory() {
+		pushHistory();
+	}
+
 	function updateNodeStyle(key: string, value: string) {
 		if (!selectedNode) return;
 		const style = { ...selectedNode.style, [key]: value };
@@ -99,6 +105,7 @@
 				</label>
 				<input
 					value={selectedNode.label}
+					onfocus={captureHistory}
 					oninput={(e) => updateNode(selectedNode!.id, { label: (e.target as HTMLInputElement).value })}
 					class="h-8 w-full rounded-md border px-2.5 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
 					style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
@@ -112,6 +119,7 @@
 				</label>
 				<textarea
 					value={selectedNode.description}
+					onfocus={captureHistory}
 					oninput={(e) => updateNode(selectedNode!.id, { description: (e.target as HTMLTextAreaElement).value })}
 					rows="3"
 					class="w-full resize-none rounded-md border px-2.5 py-2 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
@@ -131,6 +139,7 @@
 						<input
 							type="number"
 							value={Math.round(selectedNode.position.x)}
+							onfocus={captureHistory}
 							oninput={(e) => updateNode(selectedNode!.id, { position: { ...selectedNode!.position, x: Number((e.target as HTMLInputElement).value) } })}
 							class="h-7 w-full border-none bg-transparent text-xs outline-none"
 							style="color: var(--color-text-primary);"
@@ -142,6 +151,7 @@
 						<input
 							type="number"
 							value={Math.round(selectedNode.position.y)}
+							onfocus={captureHistory}
 							oninput={(e) => updateNode(selectedNode!.id, { position: { ...selectedNode!.position, y: Number((e.target as HTMLInputElement).value) } })}
 							class="h-7 w-full border-none bg-transparent text-xs outline-none"
 							style="color: var(--color-text-primary);"
@@ -162,6 +172,7 @@
 						<input
 							type="number"
 							value={selectedNode.size.width}
+							onfocus={captureHistory}
 							oninput={(e) => updateNode(selectedNode!.id, { size: { ...selectedNode!.size, width: Number((e.target as HTMLInputElement).value) } })}
 							class="h-7 w-full border-none bg-transparent text-xs outline-none"
 							style="color: var(--color-text-primary);"
@@ -173,6 +184,7 @@
 						<input
 							type="number"
 							value={selectedNode.size.height}
+							onfocus={captureHistory}
 							oninput={(e) => updateNode(selectedNode!.id, { size: { ...selectedNode!.size, height: Number((e.target as HTMLInputElement).value) } })}
 							class="h-7 w-full border-none bg-transparent text-xs outline-none"
 							style="color: var(--color-text-primary);"
@@ -229,6 +241,7 @@
 						<span class="text-[11px]" style="color: var(--color-text-muted);">Font Size</span>
 						<select
 							value={selectedNode.style?.fontSize || '12'}
+							onfocus={captureHistory}
 							onchange={(e) => updateNodeStyle('fontSize', (e.target as HTMLSelectElement).value)}
 							class="h-6 rounded border px-1.5 text-[11px] outline-none"
 							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
@@ -280,6 +293,7 @@
 				<label class="mb-1 block text-[11px] font-medium" style="color: var(--color-text-tertiary);">Label</label>
 				<input
 					value={selectedEdge.label}
+					onfocus={captureHistory}
 					oninput={(e) => updateEdge(selectedEdge!.id, { label: (e.target as HTMLInputElement).value })}
 					class="h-8 w-full rounded-md border px-2.5 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
 					style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
@@ -291,6 +305,7 @@
 				<label class="mb-1 block text-[11px] font-medium" style="color: var(--color-text-tertiary);">Description</label>
 				<textarea
 					value={selectedEdge.description}
+					onfocus={captureHistory}
 					oninput={(e) => updateEdge(selectedEdge!.id, { description: (e.target as HTMLTextAreaElement).value })}
 					rows="2"
 					class="w-full resize-none rounded-md border px-2.5 py-2 text-sm outline-none transition-colors focus:border-[var(--color-accent)]"
@@ -303,7 +318,7 @@
 					<input
 						type="checkbox"
 						checked={selectedEdge.animated}
-						onchange={(e) => updateEdge(selectedEdge!.id, { animated: (e.target as HTMLInputElement).checked })}
+						onchange={(e) => { captureHistory(); updateEdge(selectedEdge!.id, { animated: (e.target as HTMLInputElement).checked }); }}
 						class="rounded"
 					/>
 					Animated flow
@@ -314,6 +329,7 @@
 				<label class="mb-1 block text-[11px] font-medium" style="color: var(--color-text-tertiary);">Edge Type</label>
 				<select
 					value={selectedEdge.type}
+					onfocus={captureHistory}
 					onchange={(e) => updateEdge(selectedEdge!.id, { type: (e.target as HTMLSelectElement).value })}
 					class="h-8 w-full rounded-md border px-2 text-xs outline-none"
 					style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
@@ -333,7 +349,8 @@
 						<span class="text-[11px]" style="color: var(--color-text-muted);">Start</span>
 						<select
 							value={selectedEdge.markerStart || 'none'}
-							onchange={(e) => updateEdge(selectedEdge!.id, { markerStart: (e.target as HTMLSelectElement).value as MarkerType })}
+							onfocus={captureHistory}
+								onchange={(e) => updateEdge(selectedEdge!.id, { markerStart: (e.target as HTMLSelectElement).value as MarkerType })}
 							class="h-6 rounded border px-1.5 text-[11px] outline-none"
 							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
 						>
@@ -346,7 +363,8 @@
 						<span class="text-[11px]" style="color: var(--color-text-muted);">End</span>
 						<select
 							value={selectedEdge.markerEnd || 'arrowclosed'}
-							onchange={(e) => updateEdge(selectedEdge!.id, { markerEnd: (e.target as HTMLSelectElement).value as MarkerType })}
+							onfocus={captureHistory}
+								onchange={(e) => updateEdge(selectedEdge!.id, { markerEnd: (e.target as HTMLSelectElement).value as MarkerType })}
 							class="h-6 rounded border px-1.5 text-[11px] outline-none"
 							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
 						>
@@ -366,7 +384,8 @@
 						<span class="text-[11px]" style="color: var(--color-text-muted);">Style</span>
 						<select
 							value={selectedEdge.strokeStyle || 'solid'}
-							onchange={(e) => updateEdge(selectedEdge!.id, { strokeStyle: (e.target as HTMLSelectElement).value as StrokeStyle })}
+							onfocus={captureHistory}
+								onchange={(e) => updateEdge(selectedEdge!.id, { strokeStyle: (e.target as HTMLSelectElement).value as StrokeStyle })}
 							class="h-6 rounded border px-1.5 text-[11px] outline-none"
 							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
 						>
@@ -383,7 +402,8 @@
 							max="5"
 							step="0.5"
 							value={selectedEdge.strokeWidth ?? 1.5}
-							oninput={(e) => updateEdge(selectedEdge!.id, { strokeWidth: Number((e.target as HTMLInputElement).value) })}
+							onfocus={captureHistory}
+								oninput={(e) => updateEdge(selectedEdge!.id, { strokeWidth: Number((e.target as HTMLInputElement).value) })}
 							class="h-6 w-16 rounded border px-1.5 text-[11px] outline-none"
 							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
 						/>
@@ -394,13 +414,14 @@
 							<input
 								type="color"
 								value={selectedEdge.strokeColor || '#94a3b8'}
+								onfocus={captureHistory}
 								oninput={(e) => updateEdge(selectedEdge!.id, { strokeColor: (e.target as HTMLInputElement).value })}
 								class="h-6 w-6 cursor-pointer rounded border"
 								style="border-color: var(--color-border-primary);"
 							/>
 							{#if selectedEdge.strokeColor}
 								<button
-									onclick={() => updateEdge(selectedEdge!.id, { strokeColor: undefined })}
+									onclick={() => { captureHistory(); updateEdge(selectedEdge!.id, { strokeColor: undefined }); }}
 									class="text-[10px]"
 									style="color: var(--color-text-muted);"
 								>Reset</button>
