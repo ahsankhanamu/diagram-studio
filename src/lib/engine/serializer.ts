@@ -14,11 +14,18 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 		return 0;
 	});
 
+	// Content nodes use min-height so they auto-grow with text content.
+	// Fixed-shape nodes (decision, terminal, shapes, etc.) keep explicit height.
+	const contentNodeTypes = new Set(['process', 'service', 'api', 'queue', 'user']);
+
 	return sorted.map((n) => {
+		const isContentNode = contentNodeTypes.has(n.type);
 		const node: Node = {
 			id: n.id,
 			type: n.type,
 			position: { x: n.position.x, y: n.position.y },
+			width: n.size.width,
+			...(isContentNode ? {} : { height: n.size.height }),
 			data: {
 				label: n.label,
 				description: n.description,
@@ -29,14 +36,14 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 				...n.data
 			}
 		};
+		if (isContentNode) {
+			node.style = `min-height: ${n.size.height}px;`;
+		}
 		if (n.parentId) {
 			node.parentId = n.parentId;
 			node.extent = n.extent || 'parent';
 		}
-		// Group nodes need explicit dimensions for SvelteFlow parent containment
 		if (n.type === 'group') {
-			node.width = n.size.width;
-			node.height = n.size.height;
 			node.style = `width: ${n.size.width}px; height: ${n.size.height}px;`;
 			node.dragHandle = '.group-drag-handle';
 		}

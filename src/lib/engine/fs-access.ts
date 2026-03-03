@@ -220,6 +220,10 @@ export async function moveFileToFolder(
 export interface FileWatcher {
 	stop(): void;
 	markSelfWrite(): void;
+	/** Record the version we just wrote so the watcher can skip it. */
+	markSelfWriteVersion(version: number): void;
+	/** Check if a file version was written by us. */
+	isSelfWrittenVersion(version: number): boolean;
 }
 
 export interface DirectoryWatcher {
@@ -251,6 +255,7 @@ function watchFileWithPolling(
 ): FileWatcher {
 	let lastModified = 0;
 	let lastSelfWriteTime = 0;
+	const selfWrittenVersions = new Set<number>();
 	let stopped = false;
 
 	getFileModifiedTime(dirHandle, fileName).then((t) => {
@@ -285,6 +290,17 @@ function watchFileWithPolling(
 		},
 		markSelfWrite() {
 			lastSelfWriteTime = Date.now();
+		},
+		markSelfWriteVersion(version: number) {
+			selfWrittenVersions.add(version);
+			// Keep only last 20 to avoid memory leak
+			if (selfWrittenVersions.size > 20) {
+				const first = selfWrittenVersions.values().next().value;
+				if (first !== undefined) selfWrittenVersions.delete(first);
+			}
+		},
+		isSelfWrittenVersion(version: number) {
+			return selfWrittenVersions.has(version);
 		}
 	};
 }
@@ -295,6 +311,7 @@ function watchFileWithObserver(
 	onExternalChange: (diagram: DiagramFile) => void
 ): FileWatcher {
 	let lastSelfWriteTime = 0;
+	const selfWrittenVersions = new Set<number>();
 
 	const observer = new FileSystemObserver(async (records) => {
 		for (const record of records) {
@@ -326,6 +343,16 @@ function watchFileWithObserver(
 		},
 		markSelfWrite() {
 			lastSelfWriteTime = Date.now();
+		},
+		markSelfWriteVersion(version: number) {
+			selfWrittenVersions.add(version);
+			if (selfWrittenVersions.size > 20) {
+				const first = selfWrittenVersions.values().next().value;
+				if (first !== undefined) selfWrittenVersions.delete(first);
+			}
+		},
+		isSelfWrittenVersion(version: number) {
+			return selfWrittenVersions.has(version);
 		}
 	};
 }

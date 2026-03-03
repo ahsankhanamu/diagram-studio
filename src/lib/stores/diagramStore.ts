@@ -75,6 +75,18 @@ export function updateNode(id: string, updates: Partial<DiagramNode>): void {
 	notifyMutation();
 }
 
+/** Update a node without triggering the save pipeline.
+ *  Used for SvelteFlow dimension measurements which are not user edits. */
+export function updateNodeSilent(id: string, updates: Partial<DiagramNode>): void {
+	nodes.update(($n) => {
+		const node = $n.get(id);
+		if (!node) return $n;
+		const map = new Map($n);
+		map.set(id, { ...node, ...updates });
+		return map;
+	});
+}
+
 export function removeNodes(ids: string[]): void {
 	const idSet = new Set(ids);
 	nodes.update(($n) => {
