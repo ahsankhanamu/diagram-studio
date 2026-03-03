@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
+	import { NodeResizer } from '@xyflow/svelte';
+	import NodeHandles from './NodeHandles.svelte';
+	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
 		id: string;
@@ -19,14 +21,28 @@
 			right: true
 		}
 	);
+
+	function handleResizeEnd(_event: unknown, params: { width: number; height: number }) {
+		const size = Math.round(Math.max(params.width, params.height));
+		updateNode(id, { size: { width: size, height: size } });
+	}
 </script>
 
-<div class="relative flex items-center justify-center" style="width: 100px; height: 100px;">
+<NodeResizer
+	minWidth={60}
+	minHeight={60}
+	isVisible={selected}
+	onResizeEnd={handleResizeEnd}
+	lineStyle="border-color: {color};"
+	handleStyle="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 2px;"
+/>
+
+<div class="relative flex items-center justify-center" style="width: 100%; height: 100%;">
 	<div
 		class="flex items-center justify-center border"
 		style="
-			width: 72px;
-			height: 72px;
+			width: 72%;
+			height: 72%;
 			transform: rotate(45deg);
 			background: var(--color-bg-surface);
 			border-color: {selected ? color : 'var(--color-border-primary)'};
@@ -42,16 +58,5 @@
 		</span>
 	</div>
 
-	{#if ports.top}
-		<Handle type="target" position={Position.Top} id="top" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.bottom}
-		<Handle type="source" position={Position.Bottom} id="bottom" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.left}
-		<Handle type="target" position={Position.Left} id="left" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.right}
-		<Handle type="source" position={Position.Right} id="right" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
+	<NodeHandles {ports} {color} />
 </div>

@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
+	import { NodeResizer } from '@xyflow/svelte';
+	import NodeHandles from './NodeHandles.svelte';
+	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
 		id: string;
@@ -16,29 +18,33 @@
 			top: true, bottom: true, left: true, right: true
 		}
 	);
+	const nodeWidth = $derived(Number(data.nodeWidth) || 150);
+	const nodeHeight = $derived(Number(data.nodeHeight) || 48);
+
+	function handleResizeEnd(_event: unknown, params: { width: number; height: number }) {
+		updateNode(id, { size: { width: Math.round(params.width), height: Math.round(params.height) } });
+	}
 </script>
 
-<div class="relative" style="width: 150px; height: 48px;">
-	<svg viewBox="0 0 150 48" class="w-full h-full" style="filter: {selected ? `drop-shadow(0 0 2px var(--color-node-flowchart))` : 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'};">
+<NodeResizer
+	minWidth={80}
+	minHeight={32}
+	isVisible={selected}
+	onResizeEnd={handleResizeEnd}
+	lineStyle="border-color: {color};"
+	handleStyle="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 2px;"
+/>
+
+<div class="relative" style="width: 100%; height: 100%;">
+	<svg viewBox="0 0 150 48" class="w-full h-full" preserveAspectRatio="none" style="filter: {selected ? `drop-shadow(0 0 2px var(--color-node-flowchart))` : 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'};">
 		<polygon
 			points="20,0 150,0 130,48 0,48"
 			fill="var(--color-bg-surface)"
 			stroke={selected ? color : 'var(--color-border-primary)'}
 			stroke-width="1.5"
 		/>
-		<text x="75" y="28" text-anchor="middle" fill="var(--color-text-primary)" font-size="11" font-weight="500" font-family="Inter, sans-serif">{label}</text>
 	</svg>
+	<span class="absolute inset-0 flex items-center justify-center text-[11px] font-medium" style="color: var(--color-text-primary); padding-left: 16px;">{label}</span>
 
-	{#if ports.top}
-		<Handle type="target" position={Position.Top} id="top" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.bottom}
-		<Handle type="source" position={Position.Bottom} id="bottom" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.left}
-		<Handle type="target" position={Position.Left} id="left" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
-	{#if ports.right}
-		<Handle type="source" position={Position.Right} id="right" style="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%;" />
-	{/if}
+	<NodeHandles {ports} {color} />
 </div>

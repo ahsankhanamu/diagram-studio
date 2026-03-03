@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Handle, Position } from '@xyflow/svelte';
+	import { NodeResizer } from '@xyflow/svelte';
+	import NodeHandles from './NodeHandles.svelte';
+	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
 		id: string;
@@ -17,7 +19,20 @@
 			top: true, bottom: true, left: true, right: true
 		}
 	);
+
+	function handleResizeEnd(_event: unknown, params: { width: number; height: number }) {
+		updateNode(id, { size: { width: Math.round(params.width), height: Math.round(params.height) } });
+	}
 </script>
+
+<NodeResizer
+	minWidth={30}
+	minHeight={20}
+	isVisible={selected}
+	onResizeEnd={handleResizeEnd}
+	lineStyle="border-color: {color};"
+	handleStyle="width: 8px; height: 8px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 2px;"
+/>
 
 <div
 	class="flex items-center justify-center px-3 py-1"
@@ -26,22 +41,11 @@
 		outline: {selected ? `2px solid ${color}` : 'none'};
 		outline-offset: 2px;
 		border-radius: 4px;
-		min-width: 40px;
+		width: 100%; height: 100%;
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : 'font-size: 14px;'}
 	"
 >
 	<span class="font-medium whitespace-pre-wrap" style="color: {customStyle?.backgroundColor || 'var(--color-text-primary)'};">{label}</span>
 
-	{#if ports.top}
-		<Handle type="target" position={Position.Top} id="top" style="width: 6px; height: 6px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%; opacity: {selected ? 1 : 0};" />
-	{/if}
-	{#if ports.bottom}
-		<Handle type="source" position={Position.Bottom} id="bottom" style="width: 6px; height: 6px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%; opacity: {selected ? 1 : 0};" />
-	{/if}
-	{#if ports.left}
-		<Handle type="target" position={Position.Left} id="left" style="width: 6px; height: 6px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%; opacity: {selected ? 1 : 0};" />
-	{/if}
-	{#if ports.right}
-		<Handle type="source" position={Position.Right} id="right" style="width: 6px; height: 6px; background: {color}; border: 2px solid var(--color-bg-surface); border-radius: 50%; opacity: {selected ? 1 : 0};" />
-	{/if}
+	<NodeHandles {ports} {color} />
 </div>
