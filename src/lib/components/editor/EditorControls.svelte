@@ -3,6 +3,7 @@
 	import { viewport } from '$lib/stores/viewportStore';
 	import { ZOOM_MIN, ZOOM_MAX } from '$lib/constants';
 	import { Minus, Plus, ChevronDown, Crosshair, RotateCcw, Map as MapIcon } from 'lucide-svelte';
+	import SnapSettingsPopover from './SnapSettingsPopover.svelte';
 
 	interface Props {
 		showMinimap: boolean;
@@ -144,6 +145,8 @@
 	>
 		<MapIcon size={14} />
 	</button>
+
+	<SnapSettingsPopover />
 </div>
 
 <!-- Keyboard hints -->

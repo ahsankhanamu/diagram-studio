@@ -104,6 +104,8 @@ You are creating or modifying a **Diagram Studio** diagram. Instead of ASCII art
 ### Edge types
 `smoothstep` (default, best for most) | `bezier` | `straight` | `step` | `labeled` | `animated`
 
+> **Avoid same-side connections** (e.g. `right` → `right`) when possible — they create U-shaped detours. For edges going to a node that is above-left or below-right, use cross-side handles like `top` → `right` or `left` → `top`. Same-side is acceptable for retry loops and bypass edges where no cross-side option exists.
+
 ### Handle positions
 `top` | `bottom` | `left` | `right` — must match an enabled port on the node.
 
@@ -130,17 +132,18 @@ Use mixed-case alphanumeric characters (a-z, A-Z, 0-9). Each ID must be unique w
 
 Use a **top-to-bottom** flow by default (source `bottom` → target `top`). Space nodes on a grid:
 
-- **Vertical spacing**: 100px between rows
-- **Horizontal spacing**: 60px between columns
+- **Vertical spacing**: 160px between rows
+- **Horizontal spacing**: 100px between columns
 - **Starting position**: (100, 50)
 - **Align nodes** in the same row to the same Y value
+- Leave extra space around decision nodes and nodes with many connections
 
-For **left-to-right** flows, use source `right` → target `left` with 120px horizontal spacing.
+For **left-to-right** flows, use source `right` → target `left` with 160px horizontal spacing.
 
-For **architecture diagrams**, use a layered layout:
+For **architecture diagrams**, use a layered layout (200px between layers):
 - Top row: users/clients (y=50)
-- Middle row: services/APIs (y=200)
-- Bottom row: databases/queues (y=350)
+- Middle row: services/APIs (y=250)
+- Bottom row: databases/queues (y=450)
 
 ---
 

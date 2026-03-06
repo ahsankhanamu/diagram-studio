@@ -1,0 +1,12 @@
+{
+  "autokill": true,
+  "terminals": [
+    {
+      "name": "diagram-studio",
+      "description": "SvelteKit diagram editor (:3001)",
+      "command": "npm run dev",
+      "icon": "compass",
+      "color": "terminal.ansiCyan"
+    }
+  ]
+}

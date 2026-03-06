@@ -30,21 +30,21 @@
 	import { pushHistory } from '$lib/stores/historyStore';
 	import { setViewport } from '$lib/stores/viewportStore';
 	import { toFlowNodes, toFlowEdges } from '$lib/engine/serializer';
-	import { GRID_SIZE, ZOOM_MIN, ZOOM_MAX } from '$lib/constants';
+	import { ZOOM_MIN, ZOOM_MAX } from '$lib/constants';
 	import EditorControls from './EditorControls.svelte';
 	import DropHandler from './DropHandler.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import type { MenuItem } from './ContextMenu.svelte';
 	import AlignmentToolbar from './AlignmentToolbar.svelte';
 	import SnapGuides from './SnapGuides.svelte';
-	import { computeSnapGuides, type GuideLine } from '$lib/engine/snap-guides';
+	import { computeSnap, type GuideLine } from '$lib/engine/snap-guides';
+	import { snapSettings } from '$lib/stores/snapStore';
 	import { saveShape } from '$lib/stores/shapeLibraryStore';
 	import { defaultEdgeType } from '$lib/stores/edgePrefsStore';
 	import CanvasToolbar from './CanvasToolbar.svelte';
 	import { addNode } from '$lib/stores/diagramStore';
 
 	// Hoist static objects so SvelteFlow doesn't see new references every render
-	const SNAP_GRID: [number, number] = [GRID_SIZE, GRID_SIZE];
 	let defaultEdgeOptions = $derived({ type: $defaultEdgeType, animated: false });
 	const PRO_OPTIONS = { hideAttribution: true } as const;
 
@@ -94,17 +94,45 @@
 	}
 
 	// ── Node drag handlers ──────────────────────────────────────────
-	// SvelteFlow (Svelte 5) uses $bindable for nodes — it updates positions
-	// internally during drag. We use onnodedrag for snap guides and
-	// onnodedragstop to commit final positions to our store.
+	// SvelteFlow recalculates drag positions from the initial grab offset each
+	// frame, so setting targetNode.position in onnodedrag gets overwritten.
+	// We track the snap-corrected position and apply it on drag stop.
+	// Hold Alt/Option during drag to temporarily disable all snapping.
 
-	function handleNodeDrag({ targetNode, nodes: draggedNodes }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
+	let dragSnapPositions = new Map<string, { x: number; y: number }>();
+
+	function handleNodeDrag({ targetNode, nodes: draggedNodes, event }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
 		if (!targetNode) return;
 		const draggingNode = $nodeList.find((n) => n.id === targetNode.id);
-		if (draggingNode) {
-			const tempNode = { ...draggingNode, position: targetNode.position };
-			const others = $nodeList.filter((n) => n.id !== targetNode.id);
-			snapGuides = computeSnapGuides(tempNode, others);
+		if (!draggingNode) return;
+
+		// Alt/Option held = free movement, no snapping
+		const altHeld = event instanceof MouseEvent && event.altKey;
+
+		const settings = $snapSettings;
+		const hasAnySnap = settings.alignmentSnap || settings.connectorSnap || settings.geometricSnap;
+
+		if (altHeld || (!hasAnySnap && !settings.gridSnap)) {
+			snapGuides = [];
+			dragSnapPositions.delete(targetNode.id);
+			return;
+		}
+
+		const others = $nodeList.filter((n) => n.id !== targetNode.id);
+		const result = computeSnap(draggingNode, targetNode.position, others, settings);
+
+		snapGuides = result.guides;
+
+		const cx = result.correctedPosition.x;
+		const cy = result.correctedPosition.y;
+
+		// Store snapped position — applied on drag stop
+		dragSnapPositions.set(targetNode.id, { x: cx, y: cy });
+
+		// Also try direct property mutation (works with some xyflow versions)
+		if (cx !== targetNode.position.x || cy !== targetNode.position.y) {
+			targetNode.position.x = cx;
+			targetNode.position.y = cy;
 		}
 	}
 
@@ -118,13 +146,30 @@
 		}
 	}
 
-	function handleNodeDragStop({ targetNode, nodes: draggedNodes }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
+	function handleNodeDragStop({ targetNode, nodes: draggedNodes, event }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
 		snapGuides = [];
 		dragHistoryPushed = false;
-		// Commit all dragged node positions to our store → triggers save pipeline
+
+		const altHeld = event instanceof MouseEvent && event.altKey;
+		const settings = $snapSettings;
+		const hasAnySnap = !altHeld && (settings.alignmentSnap || settings.connectorSnap || settings.geometricSnap || settings.gridSnap);
+
 		for (const node of draggedNodes) {
-			updateNode(node.id, { position: { x: node.position.x, y: node.position.y } });
+			let pos = { x: node.position.x, y: node.position.y };
+
+			// Final snap calculation on the drop position for accuracy
+			if (hasAnySnap) {
+				const diagramNode = $nodeList.find((n) => n.id === node.id);
+				if (diagramNode) {
+					const others = $nodeList.filter((n) => n.id !== node.id);
+					const result = computeSnap(diagramNode, pos, others, settings);
+					pos = result.correctedPosition;
+				}
+			}
+
+			updateNode(node.id, { position: pos });
 		}
+		dragSnapPositions.clear();
 	}
 
 	function handleNodesChange(changes: NodeChange[]) {
@@ -329,8 +374,7 @@
 			selectionOnDrag
 			panOnScroll
 			panOnDrag={false}
-			snapToGrid
-			snapGrid={SNAP_GRID}
+			snapToGrid={false}
 			minZoom={ZOOM_MIN}
 			maxZoom={ZOOM_MAX}
 			zoomOnDoubleClick={false}

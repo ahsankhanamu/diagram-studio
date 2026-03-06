@@ -22,6 +22,7 @@
 	let { activeTool = 'select', onToolChange, onAddShape }: Props = $props();
 
 	let showEdgeMenu = $state(false);
+	let activeEdgePreview = $derived(edgeOptions.find((o) => o.id === $defaultEdgeType)?.preview ?? edgeOptions[0].preview);
 
 	const tools: { id: CanvasTool; icon: any; label: string; nodeType?: string }[] = [
 		{ id: 'select', icon: MousePointer2, label: 'Select' },
@@ -84,7 +85,10 @@
 				title="Connection style: {$defaultEdgeType}"
 				onclick={(e) => { e.stopPropagation(); showEdgeMenu = !showEdgeMenu; }}
 			>
-				<Spline size={16} />
+				<svg viewBox="0 0 28 18" width="20" height="14">
+					<path d={activeEdgePreview} fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+					<polygon points="22,9 26,12 22,15" fill="currentColor" transform="translate(-1, -3)" />
+				</svg>
 			</button>
 
 			{#if showEdgeMenu}

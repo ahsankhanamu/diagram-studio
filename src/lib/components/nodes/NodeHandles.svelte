@@ -16,22 +16,22 @@
 
 <!--
   Each port gets BOTH a source and target handle at the same position.
-  The visible one uses the traditional type (top/left=target, bottom/right=source).
-  The hidden one is the opposite type, enabling bidirectional edge connections
-  (e.g., sourceHandle="left" or targetHandle="bottom").
+  Visible handles are always type="source" so dragging from any handle
+  treats the starting node as the source (arrow points away from it).
+  Hidden type="target" handles allow edges to connect TO any position.
 -->
 
 {#if ports.top}
-	<Handle type="target" position={Position.Top} id="top" style={handleStyle} />
-	<Handle type="source" position={Position.Top} id="top" style={hiddenStyle} />
+	<Handle type="source" position={Position.Top} id="top" style={handleStyle} />
+	<Handle type="target" position={Position.Top} id="top" style={hiddenStyle} />
 {/if}
 {#if ports.bottom}
 	<Handle type="source" position={Position.Bottom} id="bottom" style={handleStyle} />
 	<Handle type="target" position={Position.Bottom} id="bottom" style={hiddenStyle} />
 {/if}
 {#if ports.left}
-	<Handle type="target" position={Position.Left} id="left" style={handleStyle} />
-	<Handle type="source" position={Position.Left} id="left" style={hiddenStyle} />
+	<Handle type="source" position={Position.Left} id="left" style={handleStyle} />
+	<Handle type="target" position={Position.Left} id="left" style={hiddenStyle} />
 {/if}
 {#if ports.right}
 	<Handle type="source" position={Position.Right} id="right" style={handleStyle} />

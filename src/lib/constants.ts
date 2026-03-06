@@ -1,10 +1,12 @@
-export const GRID_SIZE = 20;
+export const GRID_SIZE = 5;
 export const ZOOM_MIN = 0.1;
 export const ZOOM_MAX = 3;
 export const ZOOM_STEP = 0.1;
 
 export const DEFAULT_NODE_WIDTH = 200;
 export const DEFAULT_NODE_HEIGHT = 80;
+
+export const SNAP_THRESHOLD = 12;
 
 export const HISTORY_MAX_SIZE = 100;
 
