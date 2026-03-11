@@ -19,13 +19,12 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 	const contentNodeTypes = new Set(['process', 'service', 'api', 'queue', 'user']);
 
 	return sorted.map((n) => {
-		const isContentNode = contentNodeTypes.has(n.type);
 		const node: Node = {
 			id: n.id,
 			type: n.type,
 			position: { x: n.position.x, y: n.position.y },
 			width: n.size.width,
-			...(isContentNode ? {} : { height: n.size.height }),
+			height: n.size.height,
 			data: {
 				label: n.label,
 				description: n.description,
@@ -36,9 +35,6 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 				...n.data
 			}
 		};
-		if (isContentNode) {
-			node.style = `min-height: ${n.size.height}px;`;
-		}
 		if (n.parentId) {
 			node.parentId = n.parentId;
 			node.extent = n.extent || 'parent';

@@ -35,6 +35,7 @@
 	import { viewport, setViewport } from '$lib/stores/viewportStore';
 	import { pushHistory, pushSnapshot, undo, redo, clearHistory, registerOnHistoryChange, unregisterOnHistoryChange } from '$lib/stores/historyStore';
 	import { copySelected, paste } from '$lib/stores/clipboardStore';
+	import { editingNodeId } from '$lib/stores/editStore';
 	import { autoLayout, type LayoutDirection } from '$lib/engine/layout';
 	import { exportJson, importDiagramFile } from '$lib/engine/export';
 	import {
@@ -125,6 +126,17 @@
 		if (!$directoryHandle) return;
 		const { listEntries } = await import('$lib/engine/fs-access');
 		const entries = await listEntries($directoryHandle);
+
+		// Try to restore the last opened file
+		const lastFile = localStorage.getItem('diagram-studio-active-file');
+		if (lastFile) {
+			const found = entries.find((e) => e.kind === 'file' && e.name === lastFile);
+			if (found) {
+				await openFile(found.name);
+				return;
+			}
+		}
+
 		const firstFile = entries.find((e) => e.kind === 'file');
 		if (firstFile) {
 			await openFile(firstFile.name);
@@ -171,6 +183,7 @@
 		if (!diagram) return;
 
 		activeFile = fileName;
+		localStorage.setItem('diagram-studio-active-file', fileName);
 		loadDiagramFlat(diagram);
 		clearHistory();
 		await cacheDiagram(fileName, diagram);
@@ -485,7 +498,8 @@
 	function handleKeydown(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
 		const tag = (e.target as HTMLElement)?.tagName;
-		const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+		const isEditable = (e.target as HTMLElement)?.isContentEditable;
+		const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || isEditable;
 
 		// Allow modifier shortcuts (Cmd+S, Cmd+G, etc.) even when an input has focus.
 		// Only block non-modifier keys (Delete, Backspace, Escape) inside inputs.
@@ -523,6 +537,14 @@
 			handleDeleteSelected();
 		} else if (e.key === 'Escape') {
 			clearSelection();
+		} else if (e.key === 'Enter' && !mod && !e.shiftKey) {
+			// Enter-to-rename: like macOS Finder, press Enter on a selected node to edit its label
+			const ids = get(selectedNodeIds);
+			if (ids.size === 1) {
+				e.preventDefault();
+				const nodeId = ids.values().next().value as string;
+				if (nodeId) editingNodeId.set(nodeId);
+			}
 		}
 	}
 </script>
@@ -591,7 +613,7 @@
 				<div
 					data-panel="left"
 					class="flex shrink-0 flex-col overflow-hidden"
-					style="width: {$leftPanelWidth}px; background: var(--color-bg-surface); border-right: 1px solid var(--color-border-primary);"
+					style="width: {$leftPanelWidth}px; background: color-mix(in srgb, var(--color-bg-surface) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-right: 1px solid var(--color-border-primary);"
 				>
 					<!-- Tab bar -->
 					<div class="flex border-b" style="border-color: var(--color-border-subtle);">
