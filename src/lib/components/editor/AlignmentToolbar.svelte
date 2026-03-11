@@ -102,7 +102,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-full border px-2 py-1 shadow-md"
-		style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
+		style="background: color-mix(in srgb, var(--color-bg-surface) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-color: var(--color-border-primary);"
 		onpointerdown={(e) => e.stopPropagation()}
 	>
 		<span class="px-1 text-[10px] font-medium" style="color: var(--color-text-muted);">

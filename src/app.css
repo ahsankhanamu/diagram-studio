@@ -23,8 +23,8 @@
 	--color-border-strong: #9ca3af;
 
 	/* Canvas */
-	--color-canvas-bg: #f8fafc;
-	--color-canvas-grid: #dde3ed;
+	--color-canvas-bg: #f7f6f3;
+	--color-canvas-grid: rgba(0, 0, 0, 0.07);
 	--color-selection-rect: rgba(59, 130, 246, 0.1);
 	--color-selection-border: rgba(59, 130, 246, 0.5);
 
@@ -33,6 +33,18 @@
 	--color-node-architecture: #8b5cf6;
 	--color-node-erd: #f59e0b;
 	--color-node-workflow: #10b981;
+
+	/* Per-node-type colors */
+	--color-node-service: #6366f1;
+	--color-node-database: #3b82f6;
+	--color-node-queue: #f59e0b;
+	--color-node-api: #8b5cf6;
+	--color-node-user: #10b981;
+	--color-node-decision: #f59e0b;
+	--color-node-terminal: #10b981;
+	--color-node-io: #3b82f6;
+	--color-node-document: #6366f1;
+	--color-node-process: #3b82f6;
 
 	/* Status */
 	--color-status-saved: #22c55e;
@@ -113,18 +125,29 @@
 	--color-border-strong: #5a5a70;
 
 	--color-canvas-bg: #121218;
-	--color-canvas-grid: #2a2a38;
+	--color-canvas-grid: rgba(255, 255, 255, 0.06);
 	--color-selection-rect: rgba(91, 159, 255, 0.15);
 	--color-selection-border: rgba(91, 159, 255, 0.6);
 
-	--color-node-flowchart: #5b9fff;
-	--color-node-architecture: #b88fff;
-	--color-node-erd: #ffb938;
-	--color-node-workflow: #50e080;
+	--color-node-flowchart: #60a5fa;
+	--color-node-architecture: #c084fc;
+	--color-node-erd: #fbbf24;
+	--color-node-workflow: #34d399;
 
-	--color-edge-default: #505068;
-	--color-edge-active: #5b9fff;
-	--color-edge-selected: #818cf8;
+	--color-node-service: #818cf8;
+	--color-node-database: #60a5fa;
+	--color-node-queue: #fbbf24;
+	--color-node-api: #c084fc;
+	--color-node-user: #34d399;
+	--color-node-decision: #fbbf24;
+	--color-node-terminal: #34d399;
+	--color-node-io: #60a5fa;
+	--color-node-document: #818cf8;
+	--color-node-process: #60a5fa;
+
+	--color-edge-default: #5a5a72;
+	--color-edge-active: #60a5fa;
+	--color-edge-selected: #a78bfa;
 
 	--color-focus-ring: #5b9fff;
 	--color-hover-overlay: rgba(255, 255, 255, 0.06);
@@ -132,9 +155,9 @@
 	--color-shadow-strong: rgba(0, 0, 0, 0.6);
 	--color-overlay: rgba(0, 0, 0, 0.75);
 
-	--color-accent: #5b9fff;
-	--color-accent-hover: #7bb3ff;
-	--color-accent-light: rgba(91, 159, 255, 0.15);
+	--color-accent: #60a5fa;
+	--color-accent-hover: #93c5fd;
+	--color-accent-light: rgba(96, 165, 250, 0.15);
 
 	--color-success-bg: rgba(80, 224, 128, 0.1);
 	--color-success-accent: #50e080;
@@ -175,7 +198,7 @@
 	--color-border-strong: #4a6b94;
 
 	--color-canvas-bg: #0a1628;
-	--color-canvas-grid: #1e3a5f;
+	--color-canvas-grid: rgba(255, 255, 255, 0.05);
 	--color-selection-rect: rgba(34, 211, 238, 0.15);
 	--color-selection-border: rgba(34, 211, 238, 0.6);
 
@@ -183,6 +206,17 @@
 	--color-node-architecture: #e879f9;
 	--color-node-erd: #fb923c;
 	--color-node-workflow: #4ade80;
+
+	--color-node-service: #a5b4fc;
+	--color-node-database: #22d3ee;
+	--color-node-queue: #fb923c;
+	--color-node-api: #e879f9;
+	--color-node-user: #4ade80;
+	--color-node-decision: #fb923c;
+	--color-node-terminal: #4ade80;
+	--color-node-io: #22d3ee;
+	--color-node-document: #a5b4fc;
+	--color-node-process: #22d3ee;
 
 	--color-edge-default: #2d4a70;
 	--color-edge-active: #22d3ee;
@@ -242,6 +276,11 @@ body {
 	background-image: radial-gradient(circle, var(--color-canvas-grid) 1px, transparent 1px);
 	background-size: 20px 20px;
 	background-position: 0px 0px;
+}
+
+/* Hide grid when toggled off */
+.svelte-flow.hide-grid .svelte-flow__pane {
+	background-image: none !important;
 }
 
 /* Custom scrollbar */
@@ -330,15 +369,91 @@ body {
 	box-shadow: 0 0 0 2px var(--color-accent);
 }
 
-/* Port hover */
-.port-dot {
-	transition: transform 0.15s ease, box-shadow 0.15s ease;
+/* Node hover lift and improved shadows */
+.svelte-flow .svelte-flow__node {
+	transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.port-dot:hover {
-	transform: scale(1.4);
-	box-shadow: 0 0 0 3px var(--color-accent);
+.svelte-flow .svelte-flow__node:hover:not(.selected) {
+	filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.08));
+	transform: translateY(-1px);
 }
+
+.svelte-flow .svelte-flow__node.selected {
+	filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.12));
+}
+
+
+/* Node entrance animation */
+@keyframes node-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.92) translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+.svelte-flow .svelte-flow__node[data-animate-in="true"] {
+	animation: node-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Freeform-style handles: small dots → grow to arrow circles on hover/selection */
+.svelte-flow .svelte-flow__handle.freeform-handle {
+	width: 6px;
+	height: 6px;
+	background: var(--handle-color, var(--color-accent));
+	border: none;
+	border-radius: 50%;
+	opacity: 0.5;
+	transition: width 0.2s ease, height 0.2s ease, background 0.2s ease, border 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: visible;
+}
+
+/* Hover/selection: grow to arrow circle */
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle {
+	width: 22px;
+	height: 22px;
+	opacity: 1;
+	background: var(--color-bg-surface);
+	border: 1.5px solid color-mix(in srgb, var(--color-accent) 40%, var(--color-border-primary));
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 6px rgba(0, 0, 0, 0.05);
+	cursor: crosshair;
+}
+
+/* Show arrow SVG inside handle when grown */
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle .handle-arrow,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle .handle-arrow {
+	opacity: 1;
+}
+
+/* Individual handle hover glow */
+.svelte-flow .svelte-flow__handle.freeform-handle:hover {
+	background: color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-surface)) !important;
+	border-color: var(--color-accent) !important;
+	box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+/* When a connection is being dragged, highlight valid targets */
+.svelte-flow.connecting .svelte-flow__handle.freeform-handle {
+	width: 22px;
+	height: 22px;
+	opacity: 1;
+	background: var(--color-bg-surface);
+	border: 1.5px solid var(--color-accent);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+}
+
+.svelte-flow.connecting .svelte-flow__handle.freeform-handle .handle-arrow {
+	opacity: 1;
+}
+
 
 /* Context menu */
 .context-menu {
@@ -375,22 +490,23 @@ body {
 	--xy-background-color: transparent;
 	--xy-edge-stroke: var(--color-edge-default);
 	--xy-edge-stroke-selected: var(--color-edge-selected);
-	--xy-edge-stroke-width: 1.5;
+	--xy-edge-stroke-width: 1.8;
 	--xy-edge-stroke-width-selected: 2.5;
 	--xy-connectionline-stroke: var(--color-edge-active);
 	--xy-connectionline-stroke-width: 2;
 	--xy-minimap-background-color: var(--color-bg-surface);
 	--xy-minimap-mask-background-color: var(--color-minimap-mask);
 	--xy-node-border-radius: 8px;
-	--xy-handle-background-color: var(--color-accent);
-	--xy-handle-border-color: var(--color-bg-surface);
+	--xy-handle-background-color: var(--color-bg-surface);
+	--xy-handle-border-color: var(--color-accent);
 	--xy-selection-background-color: var(--color-selection-rect);
 	--xy-selection-border-color: var(--color-selection-border);
 }
 
 .svelte-flow .svelte-flow__edge path {
 	stroke: var(--color-edge-default);
-	stroke-width: 1.5;
+	stroke-width: 1.8;
+	transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
 .svelte-flow .svelte-flow__edge.selected path {
@@ -400,6 +516,7 @@ body {
 
 .svelte-flow .svelte-flow__edge:hover path {
 	stroke: var(--color-edge-active);
+	stroke-width: 2.2;
 }
 
 /* Smoothstep edges with rounded corners */
@@ -408,17 +525,26 @@ body {
 	stroke-linejoin: round;
 }
 
-/* Connection line (while dragging) */
+/* Connection line (while dragging) — solid like Freeform */
 .svelte-flow .svelte-flow__connectionline path {
 	stroke: var(--color-edge-active);
 	stroke-width: 2;
-	stroke-dasharray: 5 3;
 }
 
 /* Arrow markers */
 .svelte-flow .svelte-flow__arrowhead polyline {
 	stroke: var(--color-edge-default);
 	fill: var(--color-edge-default);
+}
+
+.svelte-flow .svelte-flow__edge.selected .svelte-flow__arrowhead polyline {
+	stroke: var(--color-edge-selected);
+	fill: var(--color-edge-selected);
+}
+
+.svelte-flow .svelte-flow__edge:hover .svelte-flow__arrowhead polyline {
+	stroke: var(--color-edge-active);
+	fill: var(--color-edge-active);
 }
 
 /* Hide default SvelteFlow controls (we use custom ZoomBar) */
@@ -441,8 +567,8 @@ body {
 /* Canvas dot grid background — applied on pane, not SVG */
 .svelte-flow .svelte-flow__pane {
 	background-color: var(--color-canvas-bg);
-	background-image: radial-gradient(circle, var(--color-canvas-grid) 1px, transparent 1px);
-	background-size: 20px 20px;
+	background-image: radial-gradient(circle, var(--color-canvas-grid) 0.8px, transparent 0.8px);
+	background-size: 24px 24px;
 	background-position: 0px 0px;
 }
 

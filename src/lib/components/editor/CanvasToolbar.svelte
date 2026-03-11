@@ -130,7 +130,9 @@
 		gap: 2px;
 		padding: 4px;
 		border-radius: 10px;
-		background: var(--color-bg-surface);
+		background: color-mix(in srgb, var(--color-bg-surface) 85%, transparent);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 		border: 1px solid var(--color-border-primary);
 		box-shadow: 0 2px 8px var(--color-shadow);
 		z-index: 20;

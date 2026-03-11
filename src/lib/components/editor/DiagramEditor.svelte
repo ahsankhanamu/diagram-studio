@@ -42,6 +42,10 @@
 	import { saveShape } from '$lib/stores/shapeLibraryStore';
 	import { defaultEdgeType } from '$lib/stores/edgePrefsStore';
 	import CanvasToolbar from './CanvasToolbar.svelte';
+	import GridControls from './GridControls.svelte';
+	import FloatingNodeToolbar from './FloatingNodeToolbar.svelte';
+	import ConnectionDropPicker from './ConnectionDropPicker.svelte';
+	import { gridVisible } from '$lib/stores/gridStore';
 	import { addNode } from '$lib/stores/diagramStore';
 
 	// Hoist static objects so SvelteFlow doesn't see new references every render
@@ -60,6 +64,16 @@
 
 	// Context menu state
 	let contextMenu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
+
+	// Connection drop picker state
+	let connectionPicker = $state<{
+		x: number;
+		y: number;
+		canvasX: number;
+		canvasY: number;
+		sourceNodeId: string;
+		sourceHandleId: string;
+	} | null>(null);
 
 	// Snap guides state
 	let snapGuides = $state<GuideLine[]>([]);
@@ -214,6 +228,46 @@
 		addEdgeToStore(connection.source, connection.target, connection.sourceHandle || 'bottom', connection.targetHandle || 'top');
 	}
 
+	function handleConnectEnd(event: MouseEvent | TouchEvent) {
+		// Check if the connection was dropped on empty canvas (no target node)
+		const target = event.target as HTMLElement;
+		const isOnPane = target.classList.contains('svelte-flow__pane') ||
+			target.closest('.svelte-flow__pane');
+
+		if (!isOnPane || !screenToFlow) return;
+
+		// Get the source info from the connecting class on the flow container
+		const flowEl = document.querySelector('.svelte-flow');
+		const connectingFrom = flowEl?.querySelector('.svelte-flow__handle.connecting');
+
+		// Find the source node and handle from the active connection state
+		const connectionLine = flowEl?.querySelector('.svelte-flow__connectionline');
+		if (!connectionLine) return;
+
+		// Get source node from the DOM — SvelteFlow adds data attributes
+		const sourceHandle = flowEl?.querySelector('.svelte-flow__handle.connectingfrom') as HTMLElement;
+		if (!sourceHandle) return;
+
+		const sourceNodeId = sourceHandle.getAttribute('data-nodeid');
+		const sourceHandleId = sourceHandle.getAttribute('data-handleid') || sourceHandle.getAttribute('data-handlepos') || 'bottom';
+
+		if (!sourceNodeId) return;
+
+		// Get screen position
+		const clientX = 'touches' in event ? event.changedTouches[0].clientX : event.clientX;
+		const clientY = 'touches' in event ? event.changedTouches[0].clientY : event.clientY;
+		const canvasPos = screenToFlow({ x: clientX, y: clientY });
+
+		connectionPicker = {
+			x: clientX,
+			y: clientY,
+			canvasX: canvasPos.x,
+			canvasY: canvasPos.y,
+			sourceNodeId,
+			sourceHandleId
+		};
+	}
+
 	function handleDelete({ nodes: deletedNodes, edges: deletedEdges }: { nodes: any[]; edges: any[] }) {
 		if (deletedNodes.length > 0 || deletedEdges.length > 0) pushHistory();
 		if (deletedNodes.length > 0) removeNodes(deletedNodes.map((n: any) => n.id));
@@ -362,6 +416,7 @@
 			onnodeschange={handleNodesChange}
 			onedgeschange={handleEdgesChange}
 			onconnect={handleConnect}
+			onconnectend={handleConnectEnd}
 			ondelete={handleDelete}
 			onselectionchange={handleSelectionChange}
 			onmoveend={handleMoveEnd}
@@ -379,13 +434,14 @@
 			maxZoom={ZOOM_MAX}
 			zoomOnDoubleClick={false}
 			defaultEdgeOptions={defaultEdgeOptions}
+			class={$gridVisible ? '' : 'hide-grid'}
 			style="background-color: var(--color-canvas-bg);"
 			proOptions={PRO_OPTIONS}
 		>
 			{#if showMinimap}
 				<MiniMap
 					position="bottom-right"
-					style="background: var(--color-bg-surface); border: 1px solid var(--color-border-primary); border-radius: 8px; margin-bottom: 12px; margin-right: 12px;"
+					style="background: color-mix(in srgb, var(--color-bg-surface) 85%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--color-border-primary); border-radius: 8px; margin-bottom: 12px; margin-right: 12px;"
 					maskColor="var(--color-minimap-mask)"
 					nodeColor="var(--color-accent)"
 				/>
@@ -403,6 +459,9 @@
 	<!-- Alignment Toolbar -->
 	<AlignmentToolbar />
 
+	<!-- Floating Node Toolbar (single selection) -->
+	<FloatingNodeToolbar />
+
 
 	<!-- Canvas Toolbar (shapes + edge type) -->
 	<CanvasToolbar
@@ -410,6 +469,11 @@
 		onToolChange={(t) => { activeTool = t; }}
 		onAddShape={handleToolbarAddShape}
 	/>
+
+	<!-- Grid Controls (bottom-right, below minimap area) -->
+	<div class="absolute bottom-3 right-3 z-20">
+		<GridControls />
+	</div>
 
 	<!-- Snap Guides -->
 	<SnapGuides guides={snapGuides} />
@@ -423,6 +487,12 @@
 			onClose={() => (contextMenu = null)}
 		/>
 	{/if}
+
+	<!-- Connection drop picker — appears when a connection is dropped on empty canvas -->
+	<ConnectionDropPicker
+		picker={connectionPicker}
+		onClose={() => (connectionPicker = null)}
+	/>
 
 	<!-- Empty state -->
 	{#if $nodeList.length === 0}

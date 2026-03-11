@@ -41,7 +41,7 @@
 <!-- Custom ZoomBar (positioned like venturi: centered bottom, pill, ghost opacity) -->
 <div
 	class="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border px-2 py-1.5 opacity-40 shadow-lg transition-opacity duration-200 hover:opacity-100"
-	style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
+	style="background: color-mix(in srgb, var(--color-bg-surface) 85%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: var(--color-border-primary);"
 >
 	<button
 		onclick={handleZoomOut}
@@ -152,7 +152,7 @@
 <!-- Keyboard hints -->
 <div
 	class="absolute bottom-4 left-14 z-20 rounded-md border px-2.5 py-1.5 text-[10px] opacity-40 shadow-sm transition-opacity duration-200 hover:opacity-100"
-	style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-tertiary);"
+	style="background: color-mix(in srgb, var(--color-bg-surface) 85%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: var(--color-border-primary); color: var(--color-text-tertiary);"
 >
 	<kbd class="kbd-key">Drag</kbd> select
 	· <kbd class="kbd-key">Scroll</kbd> pan
