@@ -22,6 +22,14 @@
 		}
 	);
 
+	const borderStyle = $derived(customStyle?.borderStyle || 'none');
+	const borderColor = $derived(customStyle?.borderColor || 'var(--color-border-primary)');
+	const borderCss = $derived.by(() => {
+		if (borderStyle === 'none') return selected ? '1px dashed color-mix(in srgb, var(--color-accent) 50%, transparent)' : 'none';
+		const dash = borderStyle === 'dashed' ? 'dashed' : borderStyle === 'dotted' ? 'dotted' : 'solid';
+		return `1.5px ${dash} ${borderColor}`;
+	});
+
 	function handleResizeEnd(_event: unknown, params: { width: number; height: number }) {
 		updateNode(id, { size: { width: Math.round(params.width), height: Math.round(params.height) } });
 	}
@@ -40,13 +48,13 @@
 	class="flex items-center justify-center px-3 py-1"
 	style="
 		background: transparent;
-		border: {selected ? '1px dashed color-mix(in srgb, var(--color-accent) 50%, transparent)' : '1px dashed transparent'};
+		border: {borderCss};
 		border-radius: 4px;
 		width: 100%; height: 100%;
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : 'font-size: 14px;'}
 	"
 >
-	<EditableLabel {id} {label} class="font-medium whitespace-pre-wrap" style="color: {customStyle?.backgroundColor || 'var(--color-text-primary)'};" />
+	<EditableLabel {id} {label} class="font-medium whitespace-pre-wrap" style="color: {customStyle?.borderColor || 'var(--color-text-primary)'};" />
 
 	<NodeHandles {ports} {color} />
 </div>

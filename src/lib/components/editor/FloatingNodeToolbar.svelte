@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Copy, Lock, Trash2, Group } from 'lucide-svelte';
+	import { Copy, Trash2, Minus, SquareDashed } from 'lucide-svelte';
 	import { selectedNodeIds, selectedNodeCount, clearSelection } from '$lib/stores/selectionStore';
 	import { nodes, updateNode, removeNodes, addNode } from '$lib/stores/diagramStore';
 	import { pushHistory } from '$lib/stores/historyStore';
@@ -15,11 +15,22 @@
 
 	const colors = [
 		{ label: 'Blue', value: '#3b82f6' },
-		{ label: 'Indigo', value: '#6366f1', active: true },
+		{ label: 'Indigo', value: '#6366f1' },
 		{ label: 'Green', value: '#10b981' },
 		{ label: 'Amber', value: '#f59e0b' },
 		{ label: 'Red', value: '#ef4444' },
+		{ label: 'Gray', value: '#6b7280' },
 	];
+
+	const borderStyles = [
+		{ label: 'None', value: 'none', icon: 'none' },
+		{ label: 'Solid', value: 'solid', icon: 'solid' },
+		{ label: 'Dashed', value: 'dashed', icon: 'dashed' },
+		{ label: 'Dotted', value: 'dotted', icon: 'dotted' },
+	];
+
+	const currentBorderStyle = $derived(selectedNode?.style?.borderStyle || 'solid');
+	const currentColor = $derived(selectedNode?.style?.borderColor || '');
 
 	function handleDuplicate() {
 		if (!selectedNode) return;
@@ -41,9 +52,17 @@
 	function handleSetColor(hex: string) {
 		if (!selectedNode) return;
 		pushHistory();
-		updateNode(selectedNode.id, {
-			style: { ...selectedNode.style, borderColor: hex, backgroundColor: undefined }
-		});
+		const newStyle = { ...selectedNode.style };
+		newStyle.borderColor = hex;
+		updateNode(selectedNode.id, { style: newStyle });
+	}
+
+	function handleSetBorderStyle(style: string) {
+		if (!selectedNode) return;
+		pushHistory();
+		const newStyle = { ...selectedNode.style };
+		newStyle.borderStyle = style;
+		updateNode(selectedNode.id, { style: newStyle });
 	}
 </script>
 
@@ -58,11 +77,6 @@
 			<Copy size={14} />
 		</button>
 
-		<!-- Lock (placeholder) -->
-		<button class="toolbar-btn" title="Lock position">
-			<Lock size={14} />
-		</button>
-
 		<div class="toolbar-sep"></div>
 
 		<!-- Inline color dots -->
@@ -70,7 +84,7 @@
 			{#each colors as c}
 				<button
 					class="color-dot"
-					class:color-dot-active={selectedNode.style?.borderColor === c.value}
+					class:color-dot-active={currentColor === c.value}
 					style="background: {c.value};"
 					title={c.label}
 					onclick={() => handleSetColor(c.value)}
@@ -80,10 +94,38 @@
 
 		<div class="toolbar-sep"></div>
 
-		<!-- Group -->
-		<button class="toolbar-btn" title="Group">
-			<Group size={14} />
-		</button>
+		<!-- Border style -->
+		<div class="toolbar-borders">
+			{#each borderStyles as bs}
+				<button
+					class="border-btn"
+					class:border-btn-active={currentBorderStyle === bs.value}
+					title={bs.label}
+					onclick={() => handleSetBorderStyle(bs.value)}
+				>
+					{#if bs.value === 'none'}
+						<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+							<line x1="2" y1="12" x2="12" y2="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+							<rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1" stroke-opacity="0.3"/>
+						</svg>
+					{:else if bs.value === 'solid'}
+						<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+							<rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.5"/>
+						</svg>
+					{:else if bs.value === 'dashed'}
+						<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+							<rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
+						</svg>
+					{:else}
+						<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+							<rect x="1.5" y="1.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.5" stroke-dasharray="1.5 2"/>
+						</svg>
+					{/if}
+				</button>
+			{/each}
+		</div>
+
+		<div class="toolbar-sep"></div>
 
 		<!-- Delete -->
 		<button class="toolbar-btn toolbar-btn-danger" title="Delete" onclick={handleDelete}>
@@ -170,5 +212,36 @@
 
 	.color-dot-active {
 		border-color: var(--color-text-primary);
+	}
+
+	.toolbar-borders {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		padding: 0 2px;
+	}
+
+	.border-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 5px;
+		border: none;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s;
+	}
+
+	.border-btn:hover {
+		background: var(--color-hover-overlay);
+		color: var(--color-text-primary);
+	}
+
+	.border-btn-active {
+		background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+		color: var(--color-accent);
 	}
 </style>

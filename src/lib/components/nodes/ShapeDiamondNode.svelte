@@ -16,6 +16,9 @@
 	const label = $derived((data.label as string) || '');
 	const color = 'var(--color-accent)';
 	const customStyle = $derived(data.customStyle as Record<string, string> | undefined);
+	const effectiveColor = $derived(customStyle?.borderColor || color);
+	const borderStyle = $derived(customStyle?.borderStyle || 'solid');
+	const strokeDash = $derived(borderStyle === 'dashed' ? '8 4' : borderStyle === 'dotted' ? '3 3' : borderStyle === 'none' ? '' : '');
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
 			top: true, bottom: true, left: true, right: true
@@ -48,9 +51,10 @@
 	>
 		<polygon
 			points="50,2 98,50 50,98 2,50"
-			fill={customStyle?.backgroundColor || `color-mix(in srgb, ${color} 8%, var(--color-bg-surface))`}
-			stroke={selected ? color : (customStyle?.borderColor || `color-mix(in srgb, ${color} 40%, var(--color-border-primary))`)}
+			fill={customStyle?.backgroundColor || `color-mix(in srgb, ${effectiveColor} 8%, var(--color-bg-surface))`}
+			stroke={borderStyle === 'none' ? 'transparent' : (selected ? effectiveColor : (customStyle?.borderColor || `color-mix(in srgb, ${effectiveColor} 40%, var(--color-border-primary))`))}
 			stroke-width="2"
+			stroke-dasharray={strokeDash}
 		/>
 	</svg>
 	<EditableLabel {id} {label} class="relative z-10 text-xs font-medium text-center px-4" style="color: var(--color-text-primary); {customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}" />

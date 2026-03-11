@@ -15,6 +15,10 @@
 
 	const label = $derived((data.label as string) || '');
 	const color = 'var(--color-node-io)';
+	const customStyle = $derived(data.customStyle as Record<string, string> | undefined);
+	const effectiveColor = $derived(customStyle?.borderColor || color);
+	const borderStyle = $derived(customStyle?.borderStyle || 'solid');
+	const strokeDash = $derived(borderStyle === 'dashed' ? '8 4' : borderStyle === 'dotted' ? '3 3' : '');
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
 			top: true, bottom: true, left: true, right: true
@@ -41,9 +45,10 @@
 	<svg viewBox="0 0 150 48" class="w-full h-full" preserveAspectRatio="none" style="filter: {selected ? `drop-shadow(0 0 4px var(--color-node-io))` : 'drop-shadow(0 1px 2px rgba(0,0,0,0.04)) drop-shadow(0 2px 8px rgba(0,0,0,0.06))'};">
 		<polygon
 			points="20,0 150,0 130,48 0,48"
-			fill="color-mix(in srgb, var(--color-node-io) 8%, var(--color-bg-surface))"
-			stroke={selected ? color : 'color-mix(in srgb, var(--color-node-io) 40%, var(--color-border-primary))'}
+			fill={`color-mix(in srgb, ${effectiveColor} 8%, var(--color-bg-surface))`}
+			stroke={borderStyle === 'none' ? 'transparent' : (selected ? effectiveColor : `color-mix(in srgb, ${effectiveColor} 40%, var(--color-border-primary))`)}
 			stroke-width="1.5"
+			stroke-dasharray={strokeDash}
 		/>
 	</svg>
 	<span class="absolute inset-0 flex items-center justify-center text-[11px] font-medium" style="color: var(--color-text-primary); padding-left: 16px;"><EditableLabel {id} {label} /></span>
