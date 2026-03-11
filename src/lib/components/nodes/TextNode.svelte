@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
+	import EditableLabel from './EditableLabel.svelte';
+
 	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
@@ -16,7 +18,7 @@
 	const customStyle = $derived(data.customStyle as Record<string, string> | undefined);
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
-			top: true, bottom: true, left: true, right: true
+			top: false, bottom: false, left: false, right: false
 		}
 	);
 
@@ -38,14 +40,13 @@
 	class="flex items-center justify-center px-3 py-1"
 	style="
 		background: transparent;
-		outline: {selected ? `2px solid ${color}` : 'none'};
-		outline-offset: 2px;
+		border: {selected ? '1px dashed color-mix(in srgb, var(--color-accent) 50%, transparent)' : '1px dashed transparent'};
 		border-radius: 4px;
 		width: 100%; height: 100%;
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : 'font-size: 14px;'}
 	"
 >
-	<span class="font-medium whitespace-pre-wrap" style="color: {customStyle?.backgroundColor || 'var(--color-text-primary)'};">{label}</span>
+	<EditableLabel {id} {label} class="font-medium whitespace-pre-wrap" style="color: {customStyle?.backgroundColor || 'var(--color-text-primary)'};" />
 
 	<NodeHandles {ports} {color} />
 </div>

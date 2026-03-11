@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
+	import EditableLabel from './EditableLabel.svelte';
+
 	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
@@ -37,14 +39,14 @@
 <div
 	class="flex items-center justify-center rounded-md border"
 	style="
-		background: {customStyle?.backgroundColor || 'var(--color-bg-surface)'};
-		border-color: {selected ? color : (customStyle?.borderColor || 'var(--color-border-primary)')};
-		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${color} 30%, transparent)` : '0 1px 3px var(--color-shadow)'};
+		background: {customStyle?.backgroundColor || `color-mix(in srgb, ${color} 8%, var(--color-bg-surface))`};
+		border-color: {selected ? color : (customStyle?.borderColor || `color-mix(in srgb, ${color} 40%, var(--color-border-primary))`)};
+		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${color} 30%, transparent), 0 4px 16px rgba(0,0,0,0.1)` : '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)'};
 		width: 100%; height: 100%;
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}
 	"
 >
-	<span class="text-xs font-medium" style="color: var(--color-text-primary);">{label}</span>
+	<EditableLabel {id} {label} class="text-xs font-medium" style="color: var(--color-text-primary);" />
 
 	<NodeHandles {ports} {color} />
 </div>

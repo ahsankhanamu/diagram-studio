@@ -4,7 +4,7 @@
 	import { Search, ChevronDown, ChevronRight } from 'lucide-svelte';
 
 	let searchQuery = $state('');
-	let expandedCategories = $state<Set<string>>(new Set(['shapes', 'flowchart', 'architecture']));
+	let expandedCategories = $state<Set<string>>(new Set(['flowchart', 'architecture', 'erd', 'workflow']));
 
 	const categoryLabels: Record<NodeCategory, string> = {
 		shapes: 'Shapes',
@@ -20,6 +20,26 @@
 		architecture: 'var(--color-node-architecture)',
 		erd: 'var(--color-node-erd)',
 		workflow: 'var(--color-node-workflow)'
+	};
+
+	const nodeTypeColors: Record<string, string> = {
+		'shape-rect': 'var(--color-accent)',
+		'shape-circle': 'var(--color-accent)',
+		'shape-diamond': 'var(--color-accent)',
+		'text': 'var(--color-accent)',
+		'process': 'var(--color-node-process)',
+		'decision': 'var(--color-node-decision)',
+		'terminal': 'var(--color-node-terminal)',
+		'io': 'var(--color-node-io)',
+		'document': 'var(--color-node-document)',
+		'service': 'var(--color-node-service)',
+		'database': 'var(--color-node-database)',
+		'queue': 'var(--color-node-queue)',
+		'api': 'var(--color-node-api)',
+		'user': 'var(--color-node-user)',
+		'entity': 'var(--color-node-erd)',
+		'group': 'var(--color-accent)',
+		'workflow': 'var(--color-node-workflow)',
 	};
 
 	const iconPaths: Record<string, string> = {
@@ -39,7 +59,7 @@
 
 	function getFilteredCategories() {
 		const q = searchQuery.toLowerCase().trim();
-		return NODE_CATEGORIES.map((cat) => {
+		return NODE_CATEGORIES.filter((c) => c !== 'shapes').map((cat) => {
 			const nodes = getNodesByCategory(cat);
 			const filtered = q
 				? nodes.filter(
@@ -100,12 +120,11 @@
 					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
 					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
 				>
-					{#if expandedCategories.has(category)}
+					<span class="inline-block h-2 w-2 rounded-full" style="background: {categoryColors[category]};"></span>
+					<span class="flex-1 text-left">{categoryLabels[category]}</span>
+					<span class="transition-transform duration-200" style="transform: rotate({expandedCategories.has(category) ? '0deg' : '-90deg'});">
 						<ChevronDown size={12} />
-					{:else}
-						<ChevronRight size={12} />
-					{/if}
-					{categoryLabels[category]}
+					</span>
 				</button>
 
 				<div
@@ -134,7 +153,7 @@
 									<!-- Icon badge: tinted background -->
 									<div
 										class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded"
-										style="background-color: color-mix(in srgb, {categoryColors[category]} 18%, transparent); color: {categoryColors[category]};"
+										style="background-color: color-mix(in srgb, {nodeTypeColors[nodeDef.type] || categoryColors[category]} 25%, transparent); color: {nodeTypeColors[nodeDef.type] || categoryColors[category]};"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"

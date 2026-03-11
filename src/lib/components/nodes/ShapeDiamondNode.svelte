@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
+	import EditableLabel from './EditableLabel.svelte';
+
 	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
@@ -46,12 +48,12 @@
 	>
 		<polygon
 			points="50,2 98,50 50,98 2,50"
-			fill={customStyle?.backgroundColor || 'var(--color-bg-surface)'}
-			stroke={selected ? color : (customStyle?.borderColor || 'var(--color-border-primary)')}
+			fill={customStyle?.backgroundColor || `color-mix(in srgb, ${color} 8%, var(--color-bg-surface))`}
+			stroke={selected ? color : (customStyle?.borderColor || `color-mix(in srgb, ${color} 40%, var(--color-border-primary))`)}
 			stroke-width="2"
 		/>
 	</svg>
-	<span class="relative z-10 text-xs font-medium text-center px-4" style="color: var(--color-text-primary); {customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}">{label}</span>
+	<EditableLabel {id} {label} class="relative z-10 text-xs font-medium text-center px-4" style="color: var(--color-text-primary); {customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}" />
 
 	<NodeHandles {ports} {color} />
 </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
+
 	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
@@ -39,11 +40,11 @@
 	style="
 		background: var(--color-bg-surface);
 		border-color: {selected ? color : 'var(--color-border-primary)'};
-		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${color} 30%, transparent)` : '0 1px 3px var(--color-shadow)'};
+		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${color} 30%, transparent), 0 4px 16px rgba(0,0,0,0.1)` : '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)'};
 		width: 100%; height: 100%;
 	"
 >
-	<div class="border-b px-2.5 py-1.5" style="background: color-mix(in srgb, {color} 10%, transparent); border-color: var(--color-border-subtle);">
+	<div class="border-b px-2.5 py-1.5" style="background: linear-gradient(135deg, color-mix(in srgb, {color} 10%, transparent), color-mix(in srgb, {color} 4%, transparent)); border-color: var(--color-border-subtle);">
 		<span class="text-[11px] font-semibold" style="color: {color};">{label}</span>
 	</div>
 

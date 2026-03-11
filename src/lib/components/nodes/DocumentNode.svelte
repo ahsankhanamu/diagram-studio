@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
+	import EditableLabel from './EditableLabel.svelte';
+
 	import { updateNode } from '$lib/stores/diagramStore';
 
 	interface Props {
@@ -12,7 +14,7 @@
 	const { id, data, selected = false }: Props = $props();
 
 	const label = $derived((data.label as string) || '');
-	const color = 'var(--color-node-flowchart)';
+	const color = 'var(--color-node-document)';
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
 			top: true, bottom: true, left: true, right: true
@@ -34,15 +36,15 @@
 />
 
 <div class="relative" style="width: 100%; height: 100%;">
-	<svg viewBox="0 0 150 56" class="w-full h-full" preserveAspectRatio="none" style="filter: {selected ? `drop-shadow(0 0 2px var(--color-node-flowchart))` : 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'};">
+	<svg viewBox="0 0 150 56" class="w-full h-full" preserveAspectRatio="none" style="filter: {selected ? `drop-shadow(0 0 4px var(--color-node-document))` : 'drop-shadow(0 1px 2px rgba(0,0,0,0.04)) drop-shadow(0 2px 8px rgba(0,0,0,0.06))'};">
 		<path
 			d="M 0 0 L 150 0 L 150 42 Q 112 56 75 42 Q 38 28 0 42 Z"
-			fill="var(--color-bg-surface)"
-			stroke={selected ? color : 'var(--color-border-primary)'}
+			fill="color-mix(in srgb, var(--color-node-document) 8%, var(--color-bg-surface))"
+			stroke={selected ? color : 'color-mix(in srgb, var(--color-node-document) 40%, var(--color-border-primary))'}
 			stroke-width="1.5"
 		/>
 	</svg>
-	<span class="absolute inset-0 flex items-center justify-center text-[11px] font-medium" style="color: var(--color-text-primary); padding-bottom: 8px;">{label}</span>
+	<span class="absolute inset-0 flex items-center justify-center text-[11px] font-medium" style="color: var(--color-text-primary); padding-bottom: 8px;"><EditableLabel {id} {label} /></span>
 
 	<NodeHandles {ports} {color} />
 </div>
