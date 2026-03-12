@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
+	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import NodeHandles from './NodeHandles.svelte';
 	import EditableLabel from './EditableLabel.svelte';
-	import { updateNode } from '$lib/stores/diagramStore';
+	import { updateNode, updateNodeSilent, notifyMutation } from '$lib/stores/diagramStore';
 
 
 	interface Props {
@@ -17,6 +18,7 @@
 	const { id, data, selected = false, color = 'var(--color-node-process)', children }: Props = $props();
 
 	const label = $derived((data.label as string) || '');
+	const storedHeight = $derived((data.nodeHeight as number) || 60);
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
 			top: true,
@@ -34,7 +36,29 @@
 		updateNode(id, { size: { width: Math.round(params.width), height: Math.round(params.height) } });
 	}
 
+	// Auto-grow: if rendered content is taller than the stored height,
+	// update the store and schedule a save. The snapshot comparison in
+	// performSave() prevents infinite save loops — once the grown sizes
+	// are written, subsequent auto-grow produces the same snapshot → skip.
+	let cardEl: HTMLDivElement | undefined = $state();
+	let growTimer: ReturnType<typeof setTimeout> | undefined;
 
+	onMount(() => {
+		if (!cardEl) return;
+		const ro = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				const contentH = Math.ceil(entry.contentRect.height + entry.target.clientTop * 2);
+				if (contentH > storedHeight + 2) {
+					updateNodeSilent(id, { size: { width: data.nodeWidth as number, height: contentH } });
+					// Debounce: let all nodes finish measuring before triggering one save
+					clearTimeout(growTimer);
+					growTimer = setTimeout(() => notifyMutation(), 800);
+				}
+			}
+		});
+		ro.observe(cardEl);
+		return () => { ro.disconnect(); clearTimeout(growTimer); };
+	});
 </script>
 
 <NodeResizer
@@ -47,6 +71,7 @@
 />
 
 <div
+	bind:this={cardEl}
 	class="node-card rounded-lg border transition-shadow duration-150"
 	style="
 		background: {customStyle?.backgroundColor || 'var(--color-bg-surface)'};
@@ -74,13 +99,15 @@
 					<rect x="3" y="3" width="18" height="18" rx="2" />
 				</svg>
 			</div>
-			<EditableLabel {id} {label} class="flex-1 truncate text-xs font-semibold" style="color: var(--color-text-primary);" />
+			<EditableLabel {id} {label} class="flex-1 min-w-0 text-sm font-semibold leading-snug" style="color: var(--color-text-primary); overflow-wrap: break-word;" />
 		</div>
-		<div class="px-3 py-1.5">
-			<p class="text-[10px] leading-tight" style="color: var(--color-text-muted);">
-				{data.description || ''}
-			</p>
-		</div>
+		{#if data.description}
+			<div class="px-3 py-1.5">
+				<p class="text-xs leading-snug" style="color: var(--color-text-muted);">
+					{data.description}
+				</p>
+			</div>
+		{/if}
 	{/if}
 
 	<NodeHandles {ports} {color} />

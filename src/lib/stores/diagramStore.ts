@@ -87,6 +87,18 @@ export function updateNodeSilent(id: string, updates: Partial<DiagramNode>): voi
 	});
 }
 
+/** Batch-update multiple nodes silently (single store write, no save). */
+export function updateNodesBatch(updates: Map<string, Partial<DiagramNode>>): void {
+	nodes.update(($n) => {
+		const map = new Map($n);
+		for (const [id, partial] of updates) {
+			const node = map.get(id);
+			if (node) map.set(id, { ...node, ...partial });
+		}
+		return map;
+	});
+}
+
 export function removeNodes(ids: string[]): void {
 	const idSet = new Set(ids);
 	nodes.update(($n) => {
