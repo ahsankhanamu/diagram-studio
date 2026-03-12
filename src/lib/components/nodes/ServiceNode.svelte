@@ -19,10 +19,12 @@
 			<div class="flex h-5 w-5 items-center justify-center rounded" style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};">
 				<Server size={11} />
 			</div>
-			<EditableLabel {id} label={data.label as string || ''} class="flex-1 truncate text-xs font-semibold" style="color: var(--color-text-primary);" />
+			<EditableLabel {id} label={data.label as string || ''} class="flex-1 min-w-0 text-sm font-semibold leading-snug" style="color: var(--color-text-primary); overflow-wrap: break-word;" />
 		</div>
+		{#if data.description}
 		<div class="px-3 py-1.5">
-			<p class="text-[10px]" style="color: var(--color-text-muted);">{data.description || 'Service'}</p>
+			<p class="text-xs leading-snug" style="color: var(--color-text-muted);">{data.description}</p>
 		</div>
+		{/if}
 	{/snippet}
 </BaseNode>

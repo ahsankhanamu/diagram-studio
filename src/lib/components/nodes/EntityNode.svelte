@@ -45,20 +45,20 @@
 	"
 >
 	<div class="border-b px-2.5 py-1.5" style="background: linear-gradient(135deg, color-mix(in srgb, {color} 10%, transparent), color-mix(in srgb, {color} 4%, transparent)); border-color: var(--color-border-subtle);">
-		<span class="text-[11px] font-semibold" style="color: {color};">{label}</span>
+		<span class="text-sm font-semibold" style="color: {color};">{label}</span>
 	</div>
 
 	{#if fields.length > 0}
 		<div class="px-2.5 py-1">
 			{#each fields as field}
-				<div class="flex justify-between py-0.5 text-[10px]">
+				<div class="flex justify-between py-0.5 text-xs">
 					<span style="color: var(--color-text-primary);">{field.name}</span>
 					<span style="color: var(--color-text-muted);">{field.type}</span>
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<div class="px-2.5 py-1.5 text-[10px]" style="color: var(--color-text-muted);">No fields</div>
+		<div class="px-2.5 py-1.5 text-xs" style="color: var(--color-text-muted);">No fields</div>
 	{/if}
 
 	<NodeHandles {ports} {color} />

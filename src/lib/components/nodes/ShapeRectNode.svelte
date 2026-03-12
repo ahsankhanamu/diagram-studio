@@ -50,7 +50,7 @@
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}
 	"
 >
-	<EditableLabel {id} {label} class="text-xs font-medium" style="color: var(--color-text-primary);" />
+	<EditableLabel {id} {label} class="text-sm font-medium" style="color: var(--color-text-primary);" />
 
 	<NodeHandles {ports} {color} />
 </div>

@@ -51,7 +51,7 @@
 			stroke-dasharray={strokeDash}
 		/>
 	</svg>
-	<span class="absolute inset-0 flex items-center justify-center text-[11px] font-medium" style="color: var(--color-text-primary); padding-left: 16px;"><EditableLabel {id} {label} /></span>
+	<span class="absolute inset-0 flex items-center justify-center text-sm font-medium" style="color: var(--color-text-primary); padding-left: 16px;"><EditableLabel {id} {label} /></span>
 
 	<NodeHandles {ports} {color} />
 </div>

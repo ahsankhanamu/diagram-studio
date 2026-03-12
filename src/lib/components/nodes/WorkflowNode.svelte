@@ -62,7 +62,7 @@
 		<div class="flex h-5 w-5 items-center justify-center rounded" style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};">
 			<Workflow size={11} />
 		</div>
-		<EditableLabel {id} {label} class="flex-1 truncate text-xs font-medium" style="color: var(--color-text-primary);" />
+		<EditableLabel {id} {label} class="flex-1 min-w-0 text-sm font-medium leading-snug" style="color: var(--color-text-primary);" />
 		<div
 			class="h-2 w-2 rounded-full"
 			class:status-running={status === 'running'}

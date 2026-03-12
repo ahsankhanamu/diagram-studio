@@ -58,8 +58,8 @@
 		"
 	>
 		<span
-			class="text-[10px] font-medium"
-			style="transform: rotate(-45deg); color: var(--color-text-primary); max-width: 50px; text-align: center; overflow: hidden; text-overflow: ellipsis; display: block;"
+			class="text-xs font-medium"
+			style="transform: rotate(-45deg); color: var(--color-text-primary); max-width: 60px; text-align: center; overflow: hidden; text-overflow: ellipsis; display: block;"
 		>
 			{label}
 		</span>
