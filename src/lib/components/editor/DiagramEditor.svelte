@@ -54,12 +54,13 @@
 
 	interface Props {
 		onDrop?: (type: string, position: { x: number; y: number }) => void;
+		suppressDimensionChanges?: boolean;
 	}
 
-	let { onDrop }: Props = $props();
+	let { onDrop, suppressDimensionChanges = false }: Props = $props();
 
 	let showMinimap = $state(true);
-	let flowNodes = $derived(toFlowNodes($nodeList));
+	let flowNodes = $derived(toFlowNodes($nodeList, $selectedNodeIds));
 	let flowEdges = $derived(toFlowEdges($edgeList));
 
 	// Context menu state
@@ -170,13 +171,13 @@
 
 		for (const node of draggedNodes) {
 			let pos = { x: node.position.x, y: node.position.y };
+			const storeNode = $nodeList.find((n) => n.id === node.id);
 
 			// Final snap calculation on the drop position for accuracy
 			if (hasAnySnap) {
-				const diagramNode = $nodeList.find((n) => n.id === node.id);
-				if (diagramNode) {
+				if (storeNode) {
 					const others = $nodeList.filter((n) => n.id !== node.id);
-					const result = computeSnap(diagramNode, pos, others, settings);
+					const result = computeSnap(storeNode, pos, others, settings);
 					pos = result.correctedPosition;
 				}
 			}
@@ -191,6 +192,9 @@
 			if (change.type === 'remove') {
 				removeNodes([change.id]);
 			} else if (change.type === 'dimensions' && change.dimensions) {
+				// Skip dimension re-measurements after external file loads
+				// to avoid overwriting externally-specified sizes
+				if (suppressDimensionChanges) continue;
 				// Silent update — dimension auto-measurements are not user edits
 				// and should not trigger the save pipeline or pollute undo history
 				updateNodeSilent(change.id, {

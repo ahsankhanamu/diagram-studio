@@ -4,7 +4,7 @@ import type { DiagramNode, DiagramEdge, MarkerType } from '$lib/types/diagram';
 /**
  * Convert DiagramNode[] to SvelteFlow Node[]
  */
-export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
+export function toFlowNodes(diagramNodes: DiagramNode[], selectedIds?: Set<string>): Node[] {
 	// Sort so parents come before children (SvelteFlow requirement)
 	const sorted = [...diagramNodes].sort((a, b) => {
 		if (a.id === b.parentId) return -1;
@@ -14,10 +14,6 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 		return 0;
 	});
 
-	// Content nodes use min-height so they auto-grow with text content.
-	// Fixed-shape nodes (decision, terminal, shapes, etc.) keep explicit height.
-	const contentNodeTypes = new Set(['process', 'service', 'api', 'queue', 'user']);
-
 	return sorted.map((n) => {
 		const node: Node = {
 			id: n.id,
@@ -25,6 +21,7 @@ export function toFlowNodes(diagramNodes: DiagramNode[]): Node[] {
 			position: { x: n.position.x, y: n.position.y },
 			width: n.size.width,
 			height: n.size.height,
+			selected: selectedIds ? selectedIds.has(n.id) : undefined,
 			data: {
 				label: n.label,
 				description: n.description,

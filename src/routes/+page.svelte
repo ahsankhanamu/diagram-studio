@@ -11,6 +11,8 @@
 	import { FolderOpen, HardDrive, Files, Shapes, BookOpen } from 'lucide-svelte';
 	import {
 		addNode,
+		updateNode,
+		updateNodesBatch,
 		removeNodes,
 		removeEdges,
 		groupNodes,
@@ -50,6 +52,7 @@
 		type DirectoryWatcher
 	} from '$lib/engine/fs-access';
 	import { cacheDiagram, getCachedDiagram, markFsSynced } from '$lib/engine/idb-cache';
+	import { buildCanonicalSnapshot } from '$lib/engine/content-hash';
 	import {
 		directoryHandle,
 		workspaceReady,
@@ -69,6 +72,10 @@
 	let fileExplorerRef: FileExplorer | undefined = $state();
 	let editorRef: DiagramEditor | undefined = $state();
 	let savePending = false;
+	let suppressDimensionChanges = false;
+	// Snapshot tracking for safe saves
+	let lastWrittenSnapshot = '';  // canonical JSON of what we last wrote to disk
+	let lastDiskSnapshot = '';     // canonical JSON of what we last read from disk
 	let createdAt = $state('');
 	let showJsonEditor = $state(false);
 
@@ -77,7 +84,7 @@
 	// diagramStore mutation functions call scheduleSave() directly.
 
 	let saveTimer: ReturnType<typeof setTimeout> | undefined;
-	const SAVE_DEBOUNCE = 500;
+	const SAVE_DEBOUNCE = 800;
 
 	function scheduleSave() {
 		if (!activeFile) return;
@@ -202,18 +209,18 @@
 			actualFileName,
 			(updated) => {
 				if (savePending) return;
-				// Skip files we wrote ourselves (version-based check)
 				if (fileWatcher?.isSelfWrittenVersion(updated.version)) return;
-				// Also skip older or same versions as a safety net
-				const meta = get(diagramMeta);
-				if (meta && updated.version <= meta.version) return;
 				// Cancel any pending save so it doesn't overwrite the external change
 				clearTimeout(saveTimer);
 				syncStatus = 'syncing';
+				// Suppress SvelteFlow dimension re-measurements that would overwrite external sizes
+				suppressDimensionChanges = true;
 				// Preserve undo history: push current state so the user can undo the external change
 				pushHistory();
 				loadDiagramFlat(updated);
 				cacheDiagram(fileName, updated);
+				// Allow dimension changes again after SvelteFlow has settled
+				requestAnimationFrame(() => { setTimeout(() => { suppressDimensionChanges = false; }, 500); });
 				syncStatus = 'connected';
 				showExternalChangeToast();
 				console.log(`[DiagramStudio] External change: ${fileName}`);
@@ -240,6 +247,11 @@
 			version: diagram.version,
 			metadata: diagram.metadata
 		});
+
+		// Capture snapshot of loaded content for comparison
+		const snapshot = buildCanonicalSnapshot(nodeMap, edgeMap);
+		lastWrittenSnapshot = snapshot;
+		lastDiskSnapshot = snapshot;
 
 		createdAt = diagram.createdAt || '';
 		isDirty.set(false);
@@ -306,6 +318,13 @@
 			return;
 		}
 
+		// Snapshot comparison: skip save if nothing meaningful changed
+		const currentSnapshot = buildCanonicalSnapshot(get(nodes), get(edges));
+		if (currentSnapshot === lastWrittenSnapshot) {
+			savePending = false;
+			return;
+		}
+
 		saveStatus.set('saving');
 		const diagram = buildDiagramFile();
 		if (!diagram) { savePending = false; return; }
@@ -325,11 +344,16 @@
 		saveStatus.set('saved');
 
 		// Phase 2: Filesystem write — savePending stays true until this completes
-		await flushToFs(file, diagram, dirHandleVal);
+		const written = await flushToFs(file, diagram, dirHandleVal);
+		if (written) {
+			// Only update snapshots if we actually wrote to disk
+			lastWrittenSnapshot = currentSnapshot;
+			lastDiskSnapshot = currentSnapshot;
+		}
 		savePending = false;
 	}
 
-	async function flushToFs(file: string, diagram: DiagramFile, dirHandleVal: FileSystemDirectoryHandle) {
+	async function flushToFs(file: string, diagram: DiagramFile, dirHandleVal: FileSystemDirectoryHandle): Promise<boolean> {
 		try {
 			await withWriteLock(async () => {
 				fileWatcher?.markSelfWrite();
@@ -347,6 +371,7 @@
 				await writeDiagramFile(dirHandle, actualFileName, diagram);
 			});
 			await markFsSynced(file);
+			return true;
 		} catch {
 			// Retry once after 2s
 			savePending = true;
@@ -358,6 +383,7 @@
 				} catch { /* give up */ }
 				savePending = false;
 			}, 2000);
+			return false;
 		}
 	}
 
@@ -495,6 +521,11 @@
 		}
 	}
 
+	let arrowKeyHistoryPushed = false;
+	let arrowKeyTimer: ReturnType<typeof setTimeout> | undefined;
+	let arrowKeyDelta = { x: 0, y: 0 };
+	let arrowKeyNodeIds: string[] = [];
+
 	function handleKeydown(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
 		const tag = (e.target as HTMLElement)?.tagName;
@@ -532,6 +563,43 @@
 		} else if (mod && e.key === 'a') {
 			e.preventDefault();
 			handleSelectAll();
+		} else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !mod) {
+			// SvelteFlow moves nodes internally via moveSelectedNodes, but bypasses
+			// onnodeschange — so we accumulate delta and commit once after keys stop.
+			const ids = get(selectedNodeIds);
+			if (ids.size === 0) return;
+			const step = e.shiftKey ? 20 : 5;
+			const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+			const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+			if (!arrowKeyHistoryPushed) {
+				pushHistory();
+				arrowKeyHistoryPushed = true;
+				arrowKeyDelta = { x: 0, y: 0 };
+				arrowKeyNodeIds = [...ids];
+			}
+			arrowKeyDelta.x += dx;
+			arrowKeyDelta.y += dy;
+			// Commit all accumulated movement once after keys stop
+			clearTimeout(arrowKeyTimer);
+			arrowKeyTimer = setTimeout(() => {
+				// Single batch store write + one save trigger
+				const batch = new Map<string, { position: { x: number; y: number } }>();
+				for (const id of arrowKeyNodeIds) {
+					const node = get(nodes).get(id);
+					if (node) {
+						batch.set(id, {
+							position: { x: node.position.x + arrowKeyDelta.x, y: node.position.y + arrowKeyDelta.y }
+						});
+					}
+				}
+				if (batch.size > 0) {
+					updateNodesBatch(batch);
+					notifyMutation();
+				}
+				arrowKeyHistoryPushed = false;
+				arrowKeyDelta = { x: 0, y: 0 };
+				arrowKeyNodeIds = [];
+			}, 300);
 		} else if (e.key === 'Delete' || e.key === 'Backspace') {
 			e.preventDefault();
 			handleDeleteSelected();
@@ -681,7 +749,7 @@
 						onClose={() => { showJsonEditor = false; }}
 					/>
 				{:else}
-					<DiagramEditor bind:this={editorRef} onDrop={handleDrop} />
+					<DiagramEditor bind:this={editorRef} onDrop={handleDrop} {suppressDimensionChanges} />
 				{/if}
 			</div>
 
