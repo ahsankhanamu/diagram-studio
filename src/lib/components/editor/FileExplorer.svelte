@@ -7,7 +7,9 @@
 		Trash2,
 		ChevronRight,
 		ChevronDown,
-		ExternalLink
+		ExternalLink,
+		Copy,
+		Check
 	} from 'lucide-svelte';
 	import type { FileEntry } from '$lib/engine/fs-access';
 	import {
@@ -36,6 +38,15 @@
 	let renameValue = $state('');
 	let creatingNew = $state<'file' | 'folder' | null>(null);
 	let newName = $state('');
+	let copiedEntry = $state<string | null>(null);
+
+	async function handleCopyName(entry: FileEntry, e: MouseEvent) {
+		e.stopPropagation();
+		const name = entry.kind === 'file' ? entry.baseName : entry.name;
+		await navigator.clipboard.writeText(name);
+		copiedEntry = entry.name;
+		setTimeout(() => { copiedEntry = null; }, 1500);
+	}
 
 	export async function refresh() {
 		if (!$directoryHandle) return;
@@ -324,6 +335,18 @@
 					>
 						<File size={13} style="color: {activeFile === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};" />
 						<span class="min-w-0 flex-1 truncate text-xs">{entry.baseName}</span>
+						<button
+							onclick={(e) => handleCopyName(entry, e)}
+							class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
+							style="color: {copiedEntry === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};"
+							title="Copy filename"
+						>
+							{#if copiedEntry === entry.name}
+								<Check size={10} />
+							{:else}
+								<Copy size={10} />
+							{/if}
+						</button>
 						<button
 							onclick={(e) => { e.stopPropagation(); handleDelete(entry); }}
 							class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
