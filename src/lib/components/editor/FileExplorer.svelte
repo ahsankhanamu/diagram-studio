@@ -9,7 +9,12 @@
 		ChevronDown,
 		ExternalLink,
 		Copy,
-		Check
+		Check,
+		MoreVertical,
+		Pencil,
+		FolderOpen,
+		FileText,
+		ClipboardCopy
 	} from 'lucide-svelte';
 	import type { FileEntry } from '$lib/engine/fs-access';
 	import {
@@ -38,16 +43,130 @@
 	let renameValue = $state('');
 	let creatingNew = $state<'file' | 'folder' | null>(null);
 	let newName = $state('');
-	let copiedEntry = $state<string | null>(null);
+	let copiedField = $state<string | null>(null);
 
-	async function handleCopyName(entry: FileEntry, e: MouseEvent) {
-		e.stopPropagation();
-		const name = entry.kind === 'file' ? entry.baseName : entry.name;
-		await navigator.clipboard.writeText(name);
-		copiedEntry = entry.name;
-		setTimeout(() => { copiedEntry = null; }, 1500);
+	// ─── Context / Kebab menu ───────────────────────────────────
+	let menuEntry = $state<FileEntry | null>(null);
+	let menuPos = $state({ x: 0, y: 0 });
+
+	function openMenu(entry: FileEntry, x: number, y: number) {
+		menuEntry = entry;
+		menuPos = { x, y };
 	}
 
+	function closeMenu() {
+		menuEntry = null;
+	}
+
+	function handleContextMenu(entry: FileEntry, e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		openMenu(entry, e.clientX, e.clientY);
+	}
+
+	function handleKebabClick(entry: FileEntry, e: MouseEvent) {
+		e.stopPropagation();
+		if (menuEntry?.name === entry.name) {
+			closeMenu();
+			return;
+		}
+		const btn = e.currentTarget as HTMLElement;
+		const rect = btn.getBoundingClientRect();
+		openMenu(entry, rect.right + 4, rect.top);
+	}
+
+	// Close menu on outside click or Escape
+	function handleWindowClick() {
+		if (menuEntry) closeMenu();
+	}
+
+	function handleWindowKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && menuEntry) closeMenu();
+	}
+
+	// Portal action: moves the element to document.body so it escapes overflow:hidden ancestors
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				node.remove();
+			}
+		};
+	}
+
+	// Clamp menu position so it doesn't overflow the viewport
+	let menuStyle = $derived.by(() => {
+		if (!menuEntry) return '';
+		const menuW = 200;
+		const menuH = 260;
+		const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+		const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+		const x = Math.min(menuPos.x, vw - menuW - 8);
+		const y = Math.min(menuPos.y, vh - menuH - 8);
+		return `position:fixed;left:${x}px;top:${y}px;z-index:9999;`;
+	});
+
+	// ─── Clipboard helpers ──────────────────────────────────────
+	async function copyToClipboard(text: string, field: string) {
+		await navigator.clipboard.writeText(text);
+		copiedField = field;
+		setTimeout(() => { copiedField = null; }, 1500);
+		closeMenu();
+	}
+
+	function getRelativePath(entry: FileEntry): string {
+		return entry.name;
+	}
+
+	function getAbsolutePath(entry: FileEntry): string {
+		const workspace = $workspaceName || '';
+		return workspace ? `${workspace}/${entry.name}` : entry.name;
+	}
+
+	// ─── Menu actions ───────────────────────────────────────────
+	function menuCopyFilename(entry: FileEntry) {
+		const name = entry.kind === 'file' ? entry.baseName : entry.name;
+		copyToClipboard(name, `name:${entry.name}`);
+	}
+
+	function menuCopyRelativePath(entry: FileEntry) {
+		copyToClipboard(getRelativePath(entry), `rel:${entry.name}`);
+	}
+
+	function menuCopyAbsolutePath(entry: FileEntry) {
+		copyToClipboard(getAbsolutePath(entry), `abs:${entry.name}`);
+	}
+
+	function menuRename(entry: FileEntry) {
+		closeMenu();
+		startRename(entry);
+	}
+
+	function menuDelete(entry: FileEntry) {
+		closeMenu();
+		handleDelete(entry);
+	}
+
+	async function menuOpenInExplorer(entry: FileEntry) {
+		closeMenu();
+		// Resolve the parent handle for nested entries so the dialog opens at the right folder
+		let startIn: FileSystemDirectoryHandle | undefined = $directoryHandle ?? undefined;
+		if (startIn && entry.name.includes('/')) {
+			try {
+				const parentFolder = entry.name.split('/').slice(0, -1).join('/');
+				startIn = await startIn.getDirectoryHandle(parentFolder);
+			} catch { /* fall back to root */ }
+		} else if (startIn && entry.kind === 'directory') {
+			try {
+				startIn = await startIn.getDirectoryHandle(entry.name);
+			} catch { /* fall back to root */ }
+		}
+		try {
+			await (window as any).showDirectoryPicker({ mode: 'readwrite', startIn });
+		} catch { /* user cancelled */ }
+	}
+
+	// ─── File operations ────────────────────────────────────────
 	export async function refresh() {
 		if (!$directoryHandle) return;
 		entries = await listEntries($directoryHandle);
@@ -63,7 +182,6 @@
 			next.delete(folderName);
 		} else {
 			next.add(folderName);
-			// Load folder contents
 			if ($directoryHandle) {
 				try {
 					const folderHandle = await $directoryHandle.getDirectoryHandle(folderName);
@@ -102,19 +220,14 @@
 	}
 
 	async function handleOpenInFinder() {
-		// FSAA doesn't have a direct "reveal in Finder" API.
-		// But we can prompt the user to re-pick the same directory,
-		// which opens the system file picker at the workspace location.
-		// As a workaround, we show the directory name as a hint.
 		if (!$directoryHandle) return;
 		try {
-			// Try using the newer showDirectoryPicker with startIn
 			await (window as any).showDirectoryPicker({
 				mode: 'readwrite',
 				startIn: $directoryHandle
 			});
 		} catch {
-			// User cancelled — that's fine, they saw the folder in the picker
+			// User cancelled
 		}
 	}
 
@@ -147,7 +260,6 @@
 		if (newFileName !== oldName) {
 			try {
 				if (isFile) {
-					// Also update the diagram name inside the JSON
 					const diagram = await import('$lib/engine/fs-access').then((m) =>
 						m.readDiagramFile($directoryHandle!, oldName)
 					);
@@ -158,8 +270,6 @@
 					} else {
 						await renameEntry($directoryHandle!, oldName, newFileName);
 					}
-				} else {
-					// Can't rename folders in FSAA — would need to recreate
 				}
 				await refresh();
 				if (activeFile === oldName) {
@@ -203,6 +313,8 @@
 		}
 	}
 </script>
+
+<svelte:window onclick={handleWindowClick} onkeydown={handleWindowKeydown} />
 
 <div class="flex flex-col overflow-hidden" style="flex: 1;">
 	<!-- Header -->
@@ -272,6 +384,7 @@
 					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
 					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
 					onclick={() => toggleFolder(entry.name)}
+					oncontextmenu={(e) => handleContextMenu(entry, e)}
 					onkeydown={(e) => { if (e.key === 'Enter') toggleFolder(entry.name); }}
 					role="treeitem"
 					tabindex="0"
@@ -284,12 +397,12 @@
 					<Folder size={13} style="color: var(--color-text-muted);" />
 					<span class="min-w-0 flex-1 truncate text-xs">{entry.name}</span>
 					<button
-						onclick={(e) => { e.stopPropagation(); handleDelete(entry); }}
+						onclick={(e) => handleKebabClick(entry, e)}
 						class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
 						style="color: var(--color-text-muted);"
-						title="Delete folder"
+						title="More actions"
 					>
-						<Trash2 size={10} />
+						<MoreVertical size={11} />
 					</button>
 				</div>
 
@@ -301,9 +414,13 @@
 							style="color: var(--color-text-secondary); {activeFile === `${entry.name}/${child.name}` ? 'background: var(--color-hover-overlay);' : ''}"
 							onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
 							onmouseleave={(e) => { if (activeFile !== `${entry.name}/${child.name}`) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+							oncontextmenu={(e) => handleContextMenu({ ...child, name: `${entry.name}/${child.name}` }, e)}
 						>
 							<File size={13} style="color: var(--color-text-muted);" />
 							<span class="min-w-0 flex-1 truncate text-xs">{child.baseName}</span>
+							<span class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100" style="color: var(--color-text-muted);">
+								<MoreVertical size={11} />
+							</span>
 						</button>
 					{/each}
 				{/if}
@@ -325,6 +442,7 @@
 					<div
 						onclick={() => onFileSelect(entry.name)}
 						ondblclick={() => startRename(entry)}
+						oncontextmenu={(e) => handleContextMenu(entry, e)}
 						class="group flex w-full items-center gap-1.5 px-3 py-1 text-left transition-colors cursor-pointer"
 						style="color: var(--color-text-secondary); {activeFile === entry.name ? 'background: var(--color-hover-overlay);' : ''}"
 						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
@@ -336,24 +454,12 @@
 						<File size={13} style="color: {activeFile === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};" />
 						<span class="min-w-0 flex-1 truncate text-xs">{entry.baseName}</span>
 						<button
-							onclick={(e) => handleCopyName(entry, e)}
-							class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
-							style="color: {copiedEntry === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};"
-							title="Copy filename"
-						>
-							{#if copiedEntry === entry.name}
-								<Check size={10} />
-							{:else}
-								<Copy size={10} />
-							{/if}
-						</button>
-						<button
-							onclick={(e) => { e.stopPropagation(); handleDelete(entry); }}
+							onclick={(e) => handleKebabClick(entry, e)}
 							class="flex h-4 w-4 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100"
 							style="color: var(--color-text-muted);"
-							title="Delete"
+							title="More actions"
 						>
-							<Trash2 size={10} />
+							<MoreVertical size={11} />
 						</button>
 					</div>
 				{/if}
@@ -369,3 +475,96 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Context menu — portaled to body to escape sidebar overflow:hidden -->
+{#if menuEntry}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		use:portal
+		style={menuStyle}
+		onclick={(e) => e.stopPropagation()}
+		oncontextmenu={(e) => e.preventDefault()}
+	>
+		<div
+			class="min-w-[180px] rounded-lg border py-1 shadow-xl"
+			style="
+				background: var(--color-bg-surface);
+				border-color: var(--color-border-subtle);
+				backdrop-filter: blur(12px);
+			"
+		>
+			<!-- Copy section -->
+			<button class="context-menu-item" onclick={() => menuEntry && menuCopyFilename(menuEntry)}>
+				<Copy size={13} />
+				<span>Copy Name</span>
+				{#if copiedField === `name:${menuEntry.name}`}
+					<Check size={11} class="ml-auto" style="color: var(--color-accent);" />
+				{/if}
+			</button>
+			<button class="context-menu-item" onclick={() => menuEntry && menuCopyRelativePath(menuEntry)}>
+				<FileText size={13} />
+				<span>Copy Relative Path</span>
+				{#if copiedField === `rel:${menuEntry.name}`}
+					<Check size={11} class="ml-auto" style="color: var(--color-accent);" />
+				{/if}
+			</button>
+			<button class="context-menu-item" onclick={() => menuEntry && menuCopyAbsolutePath(menuEntry)}>
+				<ClipboardCopy size={13} />
+				<span>Copy Full Path</span>
+				{#if copiedField === `abs:${menuEntry.name}`}
+					<Check size={11} class="ml-auto" style="color: var(--color-accent);" />
+				{/if}
+			</button>
+
+			<div class="my-1 border-t" style="border-color: var(--color-border-subtle);"></div>
+
+			<!-- Actions section -->
+			{#if menuEntry.kind === 'file'}
+				<button class="context-menu-item" onclick={() => menuEntry && menuRename(menuEntry)}>
+					<Pencil size={13} />
+					<span>Rename</span>
+					<span class="ml-auto text-[10px]" style="color: var(--color-text-muted);">Double-click</span>
+				</button>
+			{/if}
+			<button class="context-menu-item" onclick={() => menuEntry && menuOpenInExplorer(menuEntry)}>
+				<FolderOpen size={13} />
+				<span>Reveal in Explorer</span>
+			</button>
+
+			<div class="my-1 border-t" style="border-color: var(--color-border-subtle);"></div>
+
+			<!-- Danger zone -->
+			<button class="context-menu-item context-menu-item--danger" onclick={() => menuEntry && menuDelete(menuEntry)}>
+				<Trash2 size={13} />
+				<span>Delete</span>
+			</button>
+		</div>
+	</div>
+{/if}
+
+<style>
+	.context-menu-item {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		padding: 5px 12px;
+		font-size: 12px;
+		color: var(--color-text-secondary);
+		text-align: left;
+		transition: background-color 0.1s;
+		cursor: pointer;
+		border: none;
+		background: none;
+	}
+
+	.context-menu-item:hover {
+		background-color: var(--color-hover-overlay);
+		color: var(--color-text-primary);
+	}
+
+	.context-menu-item--danger:hover {
+		background-color: color-mix(in srgb, #ef4444 12%, transparent);
+		color: #ef4444;
+	}
+</style>
