@@ -35,9 +35,10 @@ export function toFlowNodes(diagramNodes: DiagramNode[], selectedIds?: Set<strin
 		if (n.parentId) {
 			node.parentId = n.parentId;
 			node.extent = n.extent || 'parent';
+			node.expandParent = true;
 		}
 		if (n.type === 'group') {
-			node.style = `width: ${n.size.width}px; height: ${n.size.height}px;`;
+			node.style = `min-width: ${n.size.width}px; min-height: ${n.size.height}px; width: ${n.size.width}px; height: ${n.size.height}px;`;
 			node.dragHandle = '.group-drag-handle';
 		}
 		return node;
@@ -82,7 +83,9 @@ export function toFlowEdges(diagramEdges: DiagramEdge[]): Edge[] {
 				strokeStyle,
 				strokeWidth,
 				strokeColor: e.strokeColor || '',
-				animated: e.animated
+				animated: e.animated,
+				centerX: e.centerX,
+				centerY: e.centerY
 			},
 			style
 		};

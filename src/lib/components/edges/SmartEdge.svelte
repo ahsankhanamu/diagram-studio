@@ -8,6 +8,7 @@
 		type EdgeProps
 	} from '@xyflow/svelte';
 	import { updateEdge } from '$lib/stores/diagramStore';
+	import { pushHistory } from '$lib/stores/historyStore';
 
 	const {
 		id,
@@ -32,10 +33,15 @@
 	const strokeWidth = $derived((data?.strokeWidth as number) || 1.5);
 	const strokeColor = $derived((data?.strokeColor as string) || '');
 	const isAnimated = $derived((data?.animated as boolean) || false);
+	const centerXData = $derived(data?.centerX as number | undefined);
+	const centerYData = $derived(data?.centerY as number | undefined);
 
 	const dashArray = $derived(
 		strokeStyle === 'dashed' ? '8 4' : strokeStyle === 'dotted' ? '2 4' : 'none'
 	);
+
+	const edgeType = $derived((type as string) || 'smoothstep');
+	const isSmoothOrStep = $derived(edgeType === 'smoothstep' || edgeType === 'step');
 
 	const pathParams = $derived({
 		sourceX,
@@ -46,13 +52,26 @@
 		targetPosition
 	});
 
+	// ─── Local drag override ───────────────────────────────────
+	// During drag we use local state to avoid store→rerender→destroy cycles
+	let dragging = $state(false);
+	let localCenterX = $state<number | undefined>(undefined);
+	let localCenterY = $state<number | undefined>(undefined);
+
+	const activeCenterX = $derived(dragging ? localCenterX : centerXData);
+	const activeCenterY = $derived(dragging ? localCenterY : centerYData);
+
 	const edgePath = $derived.by(() => {
-		const edgeType = (type as string) || 'smoothstep';
 		if (edgeType === 'straight') return getStraightPath(pathParams);
 		if (edgeType === 'bezier' || edgeType === 'labeled' || edgeType === 'animated')
-			return getBezierPath(pathParams);
+			return getBezierPath({ ...pathParams, curvature: activeCenterX != null ? Math.abs(activeCenterX - (sourceX + targetX) / 2) / 100 : undefined });
 		// smoothstep, step
-		return getSmoothStepPath({ ...pathParams, borderRadius: edgeType === 'step' ? 0 : 8 });
+		return getSmoothStepPath({
+			...pathParams,
+			borderRadius: edgeType === 'step' ? 0 : 8,
+			centerX: activeCenterX,
+			centerY: activeCenterY
+		});
 	});
 
 	const edgeStyle = $derived.by(() => {
@@ -63,6 +82,62 @@
 		return s;
 	});
 
+	// ─── Segment dragging ──────────────────────────────────────
+	function toSvgPoint(svgEl: SVGSVGElement, clientX: number, clientY: number) {
+		const pt = svgEl.createSVGPoint();
+		pt.x = clientX;
+		pt.y = clientY;
+		const ctm = svgEl.getScreenCTM()?.inverse();
+		if (!ctm) return null;
+		return pt.matrixTransform(ctm);
+	}
+
+	function handlePathDown(e: MouseEvent) {
+		if (e.button !== 0 || !isSmoothOrStep || !selected) return;
+
+		e.stopPropagation();
+		e.preventDefault();
+
+		localCenterX = centerXData;
+		localCenterY = centerYData;
+		dragging = true;
+		let moved = false;
+
+		const svgEl = (e.currentTarget as Element).closest('svg') as SVGSVGElement | null;
+		if (!svgEl) return;
+
+		const onMove = (me: MouseEvent) => {
+			if (!moved) {
+				pushHistory();
+				moved = true;
+			}
+			const svgPt = toSvgPoint(svgEl, me.clientX, me.clientY);
+			if (!svgPt) return;
+			localCenterX = Math.round(svgPt.x);
+			localCenterY = Math.round(svgPt.y);
+		};
+
+		const onUp = () => {
+			document.removeEventListener('mousemove', onMove);
+			document.removeEventListener('mouseup', onUp);
+			if (moved) {
+				updateEdge(id, { centerX: localCenterX, centerY: localCenterY });
+			}
+			dragging = false;
+		};
+
+		document.addEventListener('mousemove', onMove);
+		document.addEventListener('mouseup', onUp);
+	}
+
+	function handleResetMidpoint(e: MouseEvent) {
+		e.stopPropagation();
+		e.preventDefault();
+		pushHistory();
+		updateEdge(id, { centerX: undefined, centerY: undefined });
+	}
+
+	// ─── Label editing ──────────────────────────────────────────
 	function startEdit() {
 		editValue = label;
 		editing = true;
@@ -86,9 +161,34 @@
 	{markerEnd}
 	{markerStart}
 	style={edgeStyle}
-	interactionWidth={20}
+	interactionWidth={40}
 	class={isAnimated ? 'edge-flow-animated' : ''}
 />
+
+<!-- Drag overlay — always present on smoothstep/step for wider hit area + drag when selected -->
+{#if isSmoothOrStep}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<path
+		d={edgePath[0]}
+		class="edge-drag-overlay"
+		class:dragging
+		class:is-selected={!!selected}
+		style="fill:none; stroke:#000; stroke-opacity:0; stroke-width:20; stroke-dasharray:none;"
+		onmousedown={handlePathDown}
+		ondblclick={handleResetMidpoint}
+	/>
+{/if}
+
+<!-- Visual midpoint indicator -->
+{#if selected && isSmoothOrStep}
+	<circle
+		cx={edgePath[1]}
+		cy={edgePath[2]}
+		r={dragging ? 5 : 4}
+		class="edge-midpoint-dot"
+		class:has-custom={activeCenterX != null || activeCenterY != null}
+	/>
+{/if}
 
 {#if editing}
 	<EdgeLabel x={edgePath[1]} y={edgePath[2]}>
@@ -113,3 +213,38 @@
 		<span ondblclick={startEdit}>{label}</span>
 	</EdgeLabel>
 {/if}
+
+<style>
+	.edge-drag-overlay {
+		fill: none;
+		stroke: transparent;
+		stroke-width: 40;
+		pointer-events: stroke;
+		cursor: default;
+		touch-action: none;
+	}
+	.edge-drag-overlay.is-selected {
+		cursor: grab;
+	}
+	.edge-drag-overlay.is-selected:hover {
+		stroke: var(--color-accent);
+		stroke-opacity: 0.08;
+	}
+	.edge-drag-overlay.dragging {
+		cursor: grabbing;
+		stroke: var(--color-accent);
+		stroke-opacity: 0.12;
+	}
+
+	.edge-midpoint-dot {
+		fill: var(--color-accent);
+		stroke: var(--color-bg-surface);
+		stroke-width: 1.5;
+		pointer-events: none;
+		opacity: 0.6;
+		transition: r 0.15s, opacity 0.15s;
+	}
+	.edge-midpoint-dot.has-custom {
+		opacity: 1;
+	}
+</style>

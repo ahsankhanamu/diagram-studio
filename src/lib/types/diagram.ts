@@ -46,6 +46,8 @@ export interface DiagramEdge {
 	strokeStyle?: StrokeStyle;
 	strokeWidth?: number;
 	strokeColor?: string;
+	centerX?: number;
+	centerY?: number;
 }
 
 export interface Position {

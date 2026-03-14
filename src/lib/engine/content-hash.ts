@@ -40,7 +40,9 @@ export function buildCanonicalSnapshot(
 			strokeWidth: e.strokeWidth,
 			strokeStyle: e.strokeStyle,
 			markerStart: e.markerStart,
-			markerEnd: e.markerEnd
+			markerEnd: e.markerEnd,
+			centerX: e.centerX,
+			centerY: e.centerY
 		}));
 
 	return JSON.stringify({ n: sortedNodes, e: sortedEdges });

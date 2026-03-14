@@ -31,7 +31,7 @@
 <BaseEdge
 	path={edgePath[0]}
 	{markerEnd}
-	interactionWidth={20}
+	interactionWidth={30}
 	style="stroke: {selected ? 'var(--color-edge-selected)' : 'var(--color-edge-default)'}; stroke-width: {selected ? 2.5 : 1.5};"
 />
 

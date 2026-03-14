@@ -503,24 +503,33 @@ body {
 	--xy-selection-border-color: var(--color-selection-border);
 }
 
-.svelte-flow .svelte-flow__edge path {
+.svelte-flow .svelte-flow__edge .svelte-flow__edge-path {
 	stroke: var(--color-edge-default);
 	stroke-width: 1.8;
 	transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
-.svelte-flow .svelte-flow__edge.selected path {
+.svelte-flow .svelte-flow__edge.selected .svelte-flow__edge-path {
 	stroke: var(--color-edge-selected);
-	stroke-width: 2.5;
+	stroke-width: 3;
 }
 
-.svelte-flow .svelte-flow__edge:hover path {
+.svelte-flow .svelte-flow__edge:hover .svelte-flow__edge-path {
 	stroke: var(--color-edge-active);
 	stroke-width: 2.2;
 }
 
+/* Ensure the invisible interaction path keeps its wide stroke for easy clicking */
+.svelte-flow .svelte-flow__edge .svelte-flow__edge-interaction {
+	stroke-width: 20 !important;
+	pointer-events: stroke !important;
+	stroke: transparent !important;
+	stroke-opacity: 0 !important;
+	stroke-dasharray: none !important;
+}
+
 /* Smoothstep edges with rounded corners */
-.svelte-flow .svelte-flow__edge path {
+.svelte-flow .svelte-flow__edge .svelte-flow__edge-path {
 	stroke-linecap: round;
 	stroke-linejoin: round;
 }
