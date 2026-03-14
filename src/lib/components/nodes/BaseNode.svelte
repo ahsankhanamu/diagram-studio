@@ -92,7 +92,7 @@
 			style="border-radius: 7px 7px 0 0; background: linear-gradient(135deg, color-mix(in srgb, {effectiveColor} 12%, var(--color-bg-surface)), color-mix(in srgb, {effectiveColor} 4%, var(--color-bg-surface))); border-color: var(--color-border-subtle);"
 		>
 			<div
-				class="flex h-5 w-5 items-center justify-center rounded"
+				class="flex h-5 w-5 shrink-0 items-center justify-center rounded"
 				style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};"
 			>
 				<svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">

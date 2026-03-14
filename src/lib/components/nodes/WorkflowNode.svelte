@@ -59,7 +59,7 @@
 	"
 >
 	<div class="flex items-center gap-2 px-3 py-2.5">
-		<div class="flex h-5 w-5 items-center justify-center rounded" style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};">
+		<div class="flex h-5 w-5 shrink-0 items-center justify-center rounded" style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};">
 			<Workflow size={11} />
 		</div>
 		<EditableLabel {id} {label} class="flex-1 min-w-0 text-sm font-medium leading-snug" style="color: var(--color-text-primary);" />
