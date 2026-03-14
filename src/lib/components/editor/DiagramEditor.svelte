@@ -19,6 +19,7 @@
 		addEdge as addEdgeToStore,
 		updateNode,
 		updateNodeSilent,
+		updateEdge,
 		removeNodes,
 		removeEdges,
 		insertNodeOnEdge,
@@ -187,20 +188,82 @@
 		dragSnapPositions.clear();
 	}
 
+	const GROUP_PADDING = 20;
+	const GROUP_HEADER = 32;
+
 	function handleNodesChange(changes: NodeChange[]) {
+		let groupExpanded = false;
+		const expandedGroupIds = new Set<string>();
+
 		for (const change of changes) {
 			if (change.type === 'remove') {
 				removeNodes([change.id]);
 			} else if (change.type === 'dimensions' && change.dimensions) {
-				// Skip dimension re-measurements after external file loads
-				// to avoid overwriting externally-specified sizes
 				if (suppressDimensionChanges) continue;
-				// Silent update — dimension auto-measurements are not user edits
-				// and should not trigger the save pipeline or pollute undo history
-				updateNodeSilent(change.id, {
+				const storeNode = $nodeList.find((n) => n.id === change.id);
+				if (storeNode?.type === 'group') {
+					const newW = Math.round(change.dimensions.width);
+					const newH = Math.round(change.dimensions.height);
+					if (newW !== storeNode.size.width || newH !== storeNode.size.height) {
+						updateNodeSilent(change.id, { size: { width: newW, height: newH } });
+						groupExpanded = true;
+						expandedGroupIds.add(change.id);
+					}
+				} else {
+					updateNodeSilent(change.id, {
+						size: {
+							width: Math.round(change.dimensions.width),
+							height: Math.round(change.dimensions.height)
+						}
+					});
+				}
+			} else if (change.type === 'position' && change.position) {
+				const storeNode = $nodeList.find((n) => n.id === change.id);
+				if (storeNode) {
+					const newX = Math.round(change.position.x);
+					const newY = Math.round(change.position.y);
+					if (newX !== Math.round(storeNode.position.x) || newY !== Math.round(storeNode.position.y)) {
+						updateNodeSilent(change.id, { position: { x: newX, y: newY } });
+						if (storeNode.type === 'group') expandedGroupIds.add(change.id);
+						if (storeNode.type === 'group' || storeNode.parentId) groupExpanded = true;
+					}
+				}
+			}
+		}
+
+		// Enforce minimum padding around children in expanded groups
+		if (expandedGroupIds.size > 0) {
+			enforceGroupPadding(expandedGroupIds);
+		}
+
+		if (groupExpanded) notifyMutation();
+	}
+
+	/** Ensure children have at least GROUP_PADDING from every group edge. */
+	function enforceGroupPadding(groupIds: Set<string>) {
+		const currentNodes = $nodeList;
+		for (const groupId of groupIds) {
+			const group = currentNodes.find((n) => n.id === groupId);
+			if (!group) continue;
+			const children = currentNodes.filter((n) => n.parentId === groupId);
+			if (children.length === 0) continue;
+
+			// Find the bounding box children occupy (positions are relative to group)
+			let maxRight = 0;
+			let maxBottom = 0;
+			for (const child of children) {
+				maxRight = Math.max(maxRight, child.position.x + child.size.width);
+				maxBottom = Math.max(maxBottom, child.position.y + child.size.height);
+			}
+
+			// Expand group if children + padding exceed current size
+			const neededW = maxRight + GROUP_PADDING;
+			const neededH = maxBottom + GROUP_PADDING;
+			if (neededW > group.size.width || neededH > group.size.height) {
+				updateNodeSilent(groupId, {
 					size: {
-						width: Math.round(change.dimensions.width),
-						height: Math.round(change.dimensions.height)
+						width: Math.max(group.size.width, Math.round(neededW)),
+						height: Math.max(group.size.height, Math.round(neededH))
 					}
 				});
 			}
@@ -216,23 +279,35 @@
 	}
 
 	function handleSelectionChange({ nodes: selNodes, edges: selEdges }: { nodes: any[]; edges: any[] }) {
-		const selIds = new Set(selNodes.map((n: any) => n.id));
-		// Only include a group if ALL its children are selected
-		const filtered = selNodes.filter((n: any) => {
-			if (n.type !== 'group') return true;
-			const children = $nodeList.filter((c) => c.parentId === n.id);
-			return children.length > 0 && children.every((c) => selIds.has(c.id));
-		});
-		selectNodes(filtered.map((n: any) => n.id));
+		selectNodes(selNodes.map((n: any) => n.id));
 		selectEdges(selEdges.map((e: any) => e.id));
 	}
+
+	let connectionJustMade = false;
 
 	function handleConnect(connection: Connection) {
 		pushHistory();
 		addEdgeToStore(connection.source, connection.target, connection.sourceHandle || 'bottom', connection.targetHandle || 'top');
+		connectionJustMade = true;
+	}
+
+	function handleReconnect(oldEdge: any, newConnection: Connection) {
+		pushHistory();
+		updateEdge(oldEdge.id, {
+			source: newConnection.source,
+			target: newConnection.target,
+			sourceHandle: newConnection.sourceHandle || 'bottom',
+			targetHandle: newConnection.targetHandle || 'top'
+		});
 	}
 
 	function handleConnectEnd(event: MouseEvent | TouchEvent) {
+		// If a connection was successfully made to a target, don't show the picker
+		if (connectionJustMade) {
+			connectionJustMade = false;
+			return;
+		}
+
 		// Check if the connection was dropped on empty canvas (no target node)
 		const target = event.target as HTMLElement;
 		const isOnPane = target.classList.contains('svelte-flow__pane') ||
@@ -421,6 +496,7 @@
 			onedgeschange={handleEdgesChange}
 			onconnect={handleConnect}
 			onconnectend={handleConnectEnd}
+			onreconnect={handleReconnect}
 			ondelete={handleDelete}
 			onselectionchange={handleSelectionChange}
 			onmoveend={handleMoveEnd}
@@ -434,6 +510,8 @@
 			panOnScroll
 			panOnDrag={false}
 			snapToGrid={false}
+			edgesFocusable
+			edgesReconnectable
 			minZoom={ZOOM_MIN}
 			maxZoom={ZOOM_MAX}
 			zoomOnDoubleClick={false}

@@ -233,6 +233,28 @@
 	function loadDiagramFlat(diagram: DiagramFile) {
 		const nodeMap = new Map();
 		for (const n of diagram.nodes) nodeMap.set(n.id, n);
+
+		// Migrate absolute → relative positions for children.
+		// AI-generated files may store absolute positions for children with parentId.
+		// SvelteFlow expects child positions relative to their parent.
+		for (const [, node] of nodeMap) {
+			if (!node.parentId) continue;
+			const parent = nodeMap.get(node.parentId);
+			if (!parent) continue;
+			// Heuristic: if the child's position is outside the parent's local bounds
+			// (i.e. it looks absolute), convert it to relative.
+			const relX = node.position.x - parent.position.x;
+			const relY = node.position.y - parent.position.y;
+			if (
+				node.position.x >= parent.position.x &&
+				node.position.y >= parent.position.y &&
+				relX >= 0 && relX < parent.size.width &&
+				relY >= 0 && relY < parent.size.height
+			) {
+				node.position = { x: relX, y: relY };
+			}
+		}
+
 		nodes.set(nodeMap);
 
 		const edgeMap = new Map();

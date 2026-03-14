@@ -42,3 +42,14 @@
 		{label}
 	</div>
 </div>
+
+<style>
+	/* The group body has pointer-events:none so clicks pass through to children.
+	   Restore pointer-events on resize handles and the resize control lines. */
+	:global(.svelte-flow__node-group .svelte-flow__resize-control) {
+		pointer-events: auto !important;
+	}
+	:global(.svelte-flow__node-group .svelte-flow__resize-control.line) {
+		pointer-events: auto !important;
+	}
+</style>
