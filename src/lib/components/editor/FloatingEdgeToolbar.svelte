@@ -103,11 +103,25 @@
 		{ label: 'Thick', value: 4 },
 	];
 
+	const edgeTypes = [
+		{ label: 'Smooth Step', value: 'smoothstep' },
+		{ label: 'Bezier', value: 'bezier' },
+		{ label: 'Straight', value: 'straight' },
+		{ label: 'Step', value: 'step' },
+	];
+
+	const currentEdgeType = $derived(selectedEdge?.type || 'smoothstep');
 	const hasLabel = $derived(!!selectedEdge?.label);
 
 	const currentColor = $derived(selectedEdge?.strokeColor || '');
 	const currentStrokeStyle = $derived(selectedEdge?.strokeStyle || 'solid');
 	const currentStrokeWidth = $derived(selectedEdge?.strokeWidth ?? 1.5);
+
+	function setEdgeType(value: string) {
+		if (!selectedEdge) return;
+		pushHistory();
+		updateEdge(selectedEdge.id, { type: value });
+	}
 
 	function setColor(value: string) {
 		if (!selectedEdge) return;
@@ -143,6 +157,32 @@
 		style={toolbarStyle}
 		onpointerdown={(e) => e.stopPropagation()}
 	>
+		<!-- Edge type -->
+		<div class="toolbar-edge-types">
+			{#each edgeTypes as et}
+				<button
+					class="edge-type-btn"
+					class:edge-type-btn-active={currentEdgeType === et.value}
+					title={et.label}
+					onclick={() => setEdgeType(et.value)}
+				>
+					<svg width="20" height="14" viewBox="0 0 20 14">
+						{#if et.value === 'smoothstep'}
+							<path d="M2 2 L2 7 Q2 9 4 9 L16 9 Q18 9 18 11 L18 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+						{:else if et.value === 'bezier'}
+							<path d="M2 2 C2 10 18 4 18 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+						{:else if et.value === 'straight'}
+							<line x1="2" y1="2" x2="18" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+						{:else}
+							<path d="M2 2 L2 7 L18 7 L18 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="miter"/>
+						{/if}
+					</svg>
+				</button>
+			{/each}
+		</div>
+
+		<div class="toolbar-sep"></div>
+
 		<!-- Color dots -->
 		<div class="toolbar-colors">
 			{#each colors as c}
@@ -277,6 +317,37 @@
 
 	.color-dot-active {
 		border-color: var(--color-text-primary);
+	}
+
+	.toolbar-edge-types {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		padding: 0 2px;
+	}
+
+	.edge-type-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 24px;
+		border-radius: 5px;
+		border: none;
+		background: transparent;
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s;
+	}
+
+	.edge-type-btn:hover {
+		background: var(--color-hover-overlay);
+		color: var(--color-text-primary);
+	}
+
+	.edge-type-btn-active {
+		background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+		color: var(--color-accent);
 	}
 
 	.toolbar-strokes, .toolbar-widths {
