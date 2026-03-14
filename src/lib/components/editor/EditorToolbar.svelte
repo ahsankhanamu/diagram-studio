@@ -13,7 +13,10 @@
 		Radio,
 		FolderOpen,
 		Code,
-		Eye
+		Eye,
+		Image,
+		FileJson,
+		Clipboard
 	} from 'lucide-svelte';
 	import { saveStatus } from '$lib/stores/diagramStore';
 	import { canUndo, canRedo } from '$lib/stores/historyStore';
@@ -28,7 +31,9 @@
 		showJsonEditor?: boolean;
 		onSave?: () => void;
 		onImport?: () => void;
-		onExport?: () => void;
+		onExportJson?: () => void;
+		onExportPng?: () => void;
+		onCopyImage?: () => void;
 		onAutoLayout?: (direction: 'TB' | 'LR') => void;
 		onUndo?: () => void;
 		onRedo?: () => void;
@@ -43,7 +48,9 @@
 		showJsonEditor = false,
 		onSave,
 		onImport,
-		onExport,
+		onExportJson,
+		onExportPng,
+		onCopyImage,
 		onAutoLayout,
 		onUndo,
 		onRedo,
@@ -64,13 +71,15 @@
 	};
 
 	let showLayoutDropdown = $state(false);
+	let showExportDropdown = $state(false);
 
 	function handleWindowClick(e: MouseEvent) {
-		if (showLayoutDropdown) {
-			const target = e.target as HTMLElement;
-			if (!target.closest('[data-layout-dropdown]')) {
-				showLayoutDropdown = false;
-			}
+		const target = e.target as HTMLElement;
+		if (showLayoutDropdown && !target.closest('[data-layout-dropdown]')) {
+			showLayoutDropdown = false;
+		}
+		if (showExportDropdown && !target.closest('[data-export-dropdown]')) {
+			showExportDropdown = false;
 		}
 	}
 
@@ -253,16 +262,58 @@
 		<Upload size={16} />
 	</button>
 
-	<button
-		onclick={onExport}
-		class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-		style="color: var(--color-text-tertiary);"
-		title="Export diagram"
-		onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
-		onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
-	>
-		<Download size={16} />
-	</button>
+	<div class="relative" data-export-dropdown>
+		<button
+			onclick={() => (showExportDropdown = !showExportDropdown)}
+			class="flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+			style="color: var(--color-text-tertiary);"
+			title="Export diagram"
+			onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+			onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+		>
+			<Download size={16} />
+		</button>
+
+		{#if showExportDropdown}
+			<div
+				class="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border py-1 shadow-lg"
+				style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
+			>
+				<button
+					onclick={() => { onExportPng?.(); showExportDropdown = false; }}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+					style="color: var(--color-text-secondary);"
+					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+				>
+					<Image size={14} />
+					Export PNG
+				</button>
+				<button
+					onclick={() => { onCopyImage?.(); showExportDropdown = false; }}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+					style="color: var(--color-text-secondary);"
+					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+				>
+					<Clipboard size={14} />
+					Copy as Image
+					<span class="ml-auto text-[10px]" style="color: var(--color-text-muted);">⌘⇧C</span>
+				</button>
+				<div class="mx-2 my-1 h-px" style="background: var(--color-border-primary);"></div>
+				<button
+					onclick={() => { onExportJson?.(); showExportDropdown = false; }}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+					style="color: var(--color-text-secondary);"
+					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+				>
+					<FileJson size={14} />
+					Export JSON
+				</button>
+			</div>
+		{/if}
+	</div>
 
 	<!-- JSON / Visual toggle -->
 	<div

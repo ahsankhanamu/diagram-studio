@@ -40,6 +40,7 @@
 	import { editingNodeId } from '$lib/stores/editStore';
 	import { autoLayout, type LayoutDirection } from '$lib/engine/layout';
 	import { exportJson, importDiagramFile } from '$lib/engine/export';
+	import { exportCanvasPng, copyCanvasToClipboard } from '$lib/engine/canvas-renderer';
 	import {
 		readDiagramFile,
 		writeDiagramFile,
@@ -432,9 +433,30 @@
 		notifyMutation();
 	}
 
-	function handleExport() {
+	function handleExportJson() {
 		const diagram = buildDiagramFile();
 		if (diagram) exportJson(diagram);
+	}
+
+	async function handleExportPng() {
+		const currentNodes = Array.from(get(nodes).values());
+		const currentEdges = Array.from(get(edges).values());
+		if (currentNodes.length === 0) return;
+		const meta = get(diagramMeta);
+		const name = meta?.name || 'diagram';
+		await exportCanvasPng(currentNodes, currentEdges, name, { scale: 2, padding: 40 });
+	}
+
+	async function handleCopyImage() {
+		const currentNodes = Array.from(get(nodes).values());
+		const currentEdges = Array.from(get(edges).values());
+		if (currentNodes.length === 0) return;
+		const ok = await copyCanvasToClipboard(currentNodes, currentEdges, { scale: 2, padding: 40 });
+		if (ok) {
+			// Brief toast-like feedback via save status
+			saveStatus.set('saved');
+			console.log('[DiagramStudio] Diagram copied to clipboard');
+		}
 	}
 
 	function handleDeleteSelected() {
@@ -550,6 +572,9 @@
 		} else if (mod && e.key === 'y') {
 			e.preventDefault();
 			redo();
+		} else if (mod && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+			e.preventDefault();
+			handleCopyImage();
 		} else if (mod && e.key === 'c') {
 			e.preventDefault();
 			copySelected();
@@ -669,7 +694,9 @@
 			{showJsonEditor}
 			onSave={handleSave}
 			onImport={handleImport}
-			onExport={handleExport}
+			onExportJson={handleExportJson}
+			onExportPng={handleExportPng}
+			onCopyImage={handleCopyImage}
 			onAutoLayout={handleAutoLayout}
 			onUndo={() => undo()}
 			onRedo={() => redo()}
