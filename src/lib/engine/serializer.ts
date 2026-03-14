@@ -79,6 +79,7 @@ export function toFlowEdges(diagramEdges: DiagramEdge[]): Edge[] {
 			selectable: true,
 			focusable: true,
 			data: {
+				label: e.label || '',
 				description: e.description,
 				strokeStyle,
 				strokeWidth,

@@ -207,10 +207,29 @@
 	<EdgeLabel
 		x={edgePath[1]}
 		y={edgePath[2]}
-		style="background: var(--color-bg-surface); border: 1px solid var(--color-border-primary); color: var(--color-text-secondary); border-radius: 4px; padding: 2px 6px; font-size: 11px; cursor: text;"
+		selectEdgeOnClick={true}
+		style="background: var(--color-bg-surface); border: 1px solid var(--color-border-primary); color: var(--color-text-secondary); border-radius: 4px; padding: 2px 6px; font-size: 11px;"
 	>
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<span ondblclick={startEdit}>{label}</span>
+	</EdgeLabel>
+{:else if selected}
+	<EdgeLabel
+		x={edgePath[1]}
+		y={edgePath[2]}
+		selectEdgeOnClick={true}
+	>
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<button
+			class="edge-add-label-btn"
+			ondblclick={startEdit}
+			onclick={startEdit}
+			title="Add label"
+		>
+			<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+				<path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+			</svg>
+		</button>
 	</EdgeLabel>
 {/if}
 
@@ -246,5 +265,25 @@
 	}
 	.edge-midpoint-dot.has-custom {
 		opacity: 1;
+	}
+
+	.edge-add-label-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		border: 1px solid var(--color-border-primary);
+		background: var(--color-bg-surface);
+		color: var(--color-text-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+		padding: 0;
+	}
+	.edge-add-label-btn:hover {
+		background: var(--color-hover-overlay);
+		color: var(--color-accent);
+		border-color: var(--color-accent);
 	}
 </style>

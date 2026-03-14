@@ -45,6 +45,7 @@
 	import CanvasToolbar from './CanvasToolbar.svelte';
 	import GridControls from './GridControls.svelte';
 	import FloatingNodeToolbar from './FloatingNodeToolbar.svelte';
+	import FloatingEdgeToolbar from './FloatingEdgeToolbar.svelte';
 	import ConnectionDropPicker from './ConnectionDropPicker.svelte';
 	import { gridVisible } from '$lib/stores/gridStore';
 	import { addNode } from '$lib/stores/diagramStore';
@@ -312,8 +313,12 @@
 			return;
 		}
 
-		// Check if the connection was dropped on empty canvas (no target node)
+		// Check if the drop landed on a handle or node — if so, don't show the picker
+		// (the connection either succeeded via onconnect, or was invalid)
 		const target = event.target as HTMLElement;
+		if (target.closest('.svelte-flow__handle') || target.closest('.svelte-flow__node')) return;
+
+		// Only show picker when dropped on empty canvas
 		const isOnPane = target.classList.contains('svelte-flow__pane') ||
 			target.closest('.svelte-flow__pane');
 
@@ -547,6 +552,7 @@
 
 	<!-- Floating Node Toolbar (single selection) -->
 	<FloatingNodeToolbar hidden={nodeDragging} />
+	<FloatingEdgeToolbar />
 
 
 	<!-- Canvas Toolbar (shapes + edge type) -->
