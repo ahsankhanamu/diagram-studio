@@ -79,6 +79,17 @@ You are creating or modifying a **Diagram Studio** diagram. Instead of ASCII art
 | `shape-diamond` | shapes | 80x80 | Diamond |
 | `text` | shapes | 100x30 | Free text label |
 
+### Node style properties
+
+The `style` object on nodes supports these optional keys:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `backgroundColor` | string | Card background color (hex, e.g. `"#1e293b"`) |
+| `borderColor` | string | Border color (hex). Also tints the header gradient |
+| `borderStyle` | string | `"solid"` (default), `"dashed"`, `"dotted"`, `"none"` |
+| `fontSize` | string | Font size in px (e.g. `"14"`) |
+
 ---
 
 ## Edges
@@ -97,7 +108,10 @@ You are creating or modifying a **Diagram Studio** diagram. Instead of ASCII art
   "style": {},
   "markerEnd": "arrowclosed",
   "strokeStyle": "solid",
-  "strokeWidth": 1.5
+  "strokeWidth": 1.5,
+  "strokeColor": "",
+  "centerX": null,
+  "centerY": null
 }
 ```
 
@@ -114,6 +128,17 @@ You are creating or modifying a **Diagram Studio** diagram. Instead of ASCII art
 
 ### Stroke styles
 `solid` | `dashed` | `dotted`
+
+### Edge properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `strokeStyle` | string | `"solid"` | Line style: `solid`, `dashed`, `dotted` |
+| `strokeWidth` | number | `1.5` | Line thickness: `1` (thin), `1.5` (default), `2.5` (medium), `4` (thick) |
+| `strokeColor` | string | `""` | Hex color (e.g. `"#3b82f6"`). Empty = theme default |
+| `centerX` | number \| null | `null` | Custom midpoint X for smoothstep/step routing. Set by UI drag |
+| `centerY` | number \| null | `null` | Custom midpoint Y for smoothstep/step routing. Set by UI drag |
+| `label` | string | `""` | Text displayed at the edge midpoint. Users can add/edit labels visually |
 
 ---
 
