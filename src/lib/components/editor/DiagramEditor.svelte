@@ -171,7 +171,7 @@
 		const hasAnySnap = !altHeld && (settings.alignmentSnap || settings.connectorSnap || settings.geometricSnap || settings.gridSnap);
 
 		for (const node of draggedNodes) {
-			let pos = { x: node.position.x, y: node.position.y };
+			let pos = { x: Math.round(node.position.x), y: Math.round(node.position.y) };
 			const storeNode = $nodeList.find((n) => n.id === node.id);
 
 			// Final snap calculation on the drop position for accuracy
@@ -224,8 +224,9 @@
 					const newY = Math.round(change.position.y);
 					if (newX !== Math.round(storeNode.position.x) || newY !== Math.round(storeNode.position.y)) {
 						updateNodeSilent(change.id, { position: { x: newX, y: newY } });
+						// Track group expansion for padding enforcement only — don't trigger saves
+						// Position saves are handled by handleNodeDragStop
 						if (storeNode.type === 'group') expandedGroupIds.add(change.id);
-						if (storeNode.type === 'group' || storeNode.parentId) groupExpanded = true;
 					}
 				}
 			}
