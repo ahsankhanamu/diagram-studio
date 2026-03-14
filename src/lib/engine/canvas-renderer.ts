@@ -43,8 +43,12 @@ interface Rect {
 
 // ── Color Utilities ────────────────────────────────────────────────
 
-function hexToRgb(hex: string): [number, number, number] {
-	hex = hex.replace('#', '');
+function hexToRgb(color: string): [number, number, number] {
+	// Handle rgb(r, g, b) and rgba(r, g, b, a) formats from getComputedStyle
+	const rgbMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+	if (rgbMatch) return [parseInt(rgbMatch[1]), parseInt(rgbMatch[2]), parseInt(rgbMatch[3])];
+	// Handle hex
+	let hex = color.replace('#', '');
 	if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
 	return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
 }
@@ -233,82 +237,159 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 	return lines;
 }
 
-// ── Icon Drawing (simplified geometric icons) ──────────────────────
+// ── Icon Drawing (Lucide-accurate icons) ────────────────────────────
 
-function drawNodeIcon(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, size: number, color: string) {
-	const cx = x + size / 2;
-	const cy = y + size / 2;
-	const s = size * 0.45;
+function drawNodeIcon(ctx: CanvasRenderingContext2D, type: string, x: number, y: number, boxSize: number, color: string) {
+	// Icons are drawn in a 24x24 viewBox, scaled to fit ~11px in a 20px box
+	const iconSize = boxSize * 0.55;
+	const offset = (boxSize - iconSize) / 2;
+	const sc = iconSize / 24;
+
+	ctx.save();
+	ctx.translate(x + offset, y + offset);
+	ctx.scale(sc, sc);
 	ctx.strokeStyle = color;
-	ctx.lineWidth = 1.5;
+	ctx.fillStyle = 'none';
+	ctx.lineWidth = 2;
 	ctx.lineCap = 'round';
 	ctx.lineJoin = 'round';
 	ctx.setLineDash([]);
 
-	ctx.beginPath();
 	switch (type) {
 		case 'process':
 		case 'shape-rect':
-			// Rectangle icon
-			ctx.rect(cx - s, cy - s * 0.7, s * 2, s * 1.4);
+			// Lucide SquareIcon: <rect x="3" y="3" width="18" height="18" rx="2"/>
+			roundedRect24(ctx, 3, 3, 18, 18, 2);
 			ctx.stroke();
 			break;
+
 		case 'service':
-			// Server icon — stacked rectangles
-			ctx.rect(cx - s, cy - s, s * 2, s * 0.8);
-			ctx.moveTo(cx - s, cy + s * 0.2);
-			ctx.rect(cx - s, cy + s * 0.2, s * 2, s * 0.8);
+			// Lucide Server: two stacked rounded rects + indicator dots
+			roundedRect24(ctx, 2, 2, 20, 8, 2);
 			ctx.stroke();
-			break;
-		case 'database':
-			// Cylinder icon
-			ctx.ellipse(cx, cy - s * 0.5, s, s * 0.35, 0, 0, Math.PI * 2);
-			ctx.moveTo(cx - s, cy - s * 0.5);
-			ctx.lineTo(cx - s, cy + s * 0.5);
-			ctx.moveTo(cx + s, cy - s * 0.5);
-			ctx.lineTo(cx + s, cy + s * 0.5);
+			roundedRect24(ctx, 2, 14, 20, 8, 2);
+			ctx.stroke();
+			// Indicator dots
+			ctx.beginPath();
+			ctx.arc(6, 6, 0.5, 0, Math.PI * 2);
 			ctx.stroke();
 			ctx.beginPath();
-			ctx.ellipse(cx, cy + s * 0.5, s, s * 0.35, 0, 0, Math.PI * 2);
+			ctx.arc(6, 18, 0.5, 0, Math.PI * 2);
 			ctx.stroke();
 			break;
+
+		case 'database':
+			// Lucide Database: ellipse top + body + middle line
+			ctx.beginPath();
+			ctx.ellipse(12, 5, 9, 3, 0, 0, Math.PI * 2);
+			ctx.stroke();
+			// Body sides
+			ctx.beginPath();
+			ctx.moveTo(21, 5);
+			ctx.lineTo(21, 19);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(3, 5);
+			ctx.lineTo(3, 19);
+			ctx.stroke();
+			// Bottom ellipse
+			ctx.beginPath();
+			ctx.ellipse(12, 19, 9, 3, 0, 0, Math.PI * 2);
+			ctx.stroke();
+			// Middle line
+			ctx.beginPath();
+			ctx.ellipse(12, 12, 9, 3, 0, 0, Math.PI);
+			ctx.stroke();
+			break;
+
 		case 'queue':
-			// List icon — three lines
-			for (let i = -1; i <= 1; i++) {
-				ctx.moveTo(cx - s, cy + i * s * 0.6);
-				ctx.lineTo(cx + s, cy + i * s * 0.6);
-			}
+			// Lucide ListOrdered: three lines + numbering
+			ctx.beginPath();
+			ctx.moveTo(10, 6); ctx.lineTo(21, 6);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(10, 12); ctx.lineTo(21, 12);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(10, 18); ctx.lineTo(21, 18);
+			ctx.stroke();
+			// Numbers (simplified)
+			ctx.beginPath();
+			ctx.moveTo(4, 6); ctx.lineTo(5, 6); ctx.lineTo(5, 10);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(4, 10); ctx.lineTo(6, 10);
 			ctx.stroke();
 			break;
+
 		case 'api':
-			// Globe icon — circle with horizontal/vertical lines
-			ctx.arc(cx, cy, s, 0, Math.PI * 2);
-			ctx.moveTo(cx - s, cy);
-			ctx.lineTo(cx + s, cy);
-			ctx.moveTo(cx, cy - s);
-			ctx.lineTo(cx, cy + s);
+			// Lucide Globe: circle + vertical ellipse + horizontal line
+			ctx.beginPath();
+			ctx.arc(12, 12, 10, 0, Math.PI * 2);
+			ctx.stroke();
+			// Vertical meridian
+			ctx.beginPath();
+			ctx.ellipse(12, 12, 4, 10, 0, 0, Math.PI * 2);
+			ctx.stroke();
+			// Horizontal line
+			ctx.beginPath();
+			ctx.moveTo(2, 12); ctx.lineTo(22, 12);
 			ctx.stroke();
 			break;
+
 		case 'user':
-			// User icon — head circle + body arc
-			ctx.arc(cx, cy - s * 0.3, s * 0.4, 0, Math.PI * 2);
-			ctx.moveTo(cx + s, cy + s);
-			ctx.arc(cx, cy + s * 1.2, s, -Math.PI * 0.8, -Math.PI * 0.2);
+			// Lucide User: head circle + body path
+			ctx.beginPath();
+			ctx.arc(12, 7, 4, 0, Math.PI * 2);
+			ctx.stroke();
+			// Body
+			ctx.beginPath();
+			ctx.moveTo(19, 21);
+			ctx.lineTo(19, 19);
+			// Approximate the arc: a4,4 0 0,0 -4,-4 -> quarter circle
+			ctx.bezierCurveTo(19, 16.8, 17.2, 15, 15, 15);
+			ctx.lineTo(9, 15);
+			ctx.bezierCurveTo(6.8, 15, 5, 16.8, 5, 19);
+			ctx.lineTo(5, 21);
 			ctx.stroke();
 			break;
+
 		case 'workflow':
-			// Play/arrow icon
-			ctx.moveTo(cx - s * 0.4, cy - s * 0.7);
-			ctx.lineTo(cx + s * 0.6, cy);
-			ctx.lineTo(cx - s * 0.4, cy + s * 0.7);
-			ctx.closePath();
+			// Lucide Workflow: two rounded rects connected by path
+			roundedRect24(ctx, 3, 3, 8, 8, 2);
+			ctx.stroke();
+			roundedRect24(ctx, 13, 13, 8, 8, 2);
+			ctx.stroke();
+			// Connecting path
+			ctx.beginPath();
+			ctx.moveTo(7, 11);
+			ctx.lineTo(7, 15);
+			ctx.bezierCurveTo(7, 16.1, 7.9, 17, 9, 17);
+			ctx.lineTo(13, 17);
 			ctx.stroke();
 			break;
+
 		default:
 			// Generic square
-			ctx.rect(cx - s * 0.7, cy - s * 0.7, s * 1.4, s * 1.4);
+			roundedRect24(ctx, 3, 3, 18, 18, 2);
 			ctx.stroke();
 	}
+
+	ctx.restore();
+}
+
+function roundedRect24(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+	ctx.beginPath();
+	ctx.moveTo(x + r, y);
+	ctx.lineTo(x + w - r, y);
+	ctx.arcTo(x + w, y, x + w, y + r, r);
+	ctx.lineTo(x + w, y + h - r);
+	ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+	ctx.lineTo(x + r, y + h);
+	ctx.arcTo(x, y + h, x, y + h - r, r);
+	ctx.lineTo(x, y + r);
+	ctx.arcTo(x, y, x + r, y, r);
+	ctx.closePath();
 }
 
 // ── Node Drawing ───────────────────────────────────────────────────
@@ -822,10 +903,12 @@ function drawShapeDiamond(ctx: CanvasRenderingContext2D, node: DiagramNode, pos:
 function drawTextNode(ctx: CanvasRenderingContext2D, node: DiagramNode, pos: { x: number; y: number }, theme: ThemeColors) {
 	const { x, y } = pos;
 	const { width: w, height: h } = node.size;
-	const fontSize = node.style?.fontSize ? `${node.style.fontSize}px` : '13px';
+	const fontSize = node.style?.fontSize ? `${node.style.fontSize}px` : '14px';
+	// TextNode.svelte uses borderColor as text color when set
+	const textColor = node.style?.borderColor || theme.textPrimary;
 	drawText(ctx, node.label, x + w / 2, y + h / 2, w, {
 		font: `${fontSize} Inter, -apple-system, sans-serif`,
-		color: theme.textPrimary,
+		color: textColor,
 		align: 'center',
 	});
 }
