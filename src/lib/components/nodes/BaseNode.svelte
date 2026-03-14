@@ -88,8 +88,8 @@
 	{:else}
 		<!-- Header with colored tint -->
 		<div
-			class="flex items-center gap-2 rounded-t-lg border-b px-3 py-2"
-			style="background: linear-gradient(135deg, color-mix(in srgb, {effectiveColor} 12%, var(--color-bg-surface)), color-mix(in srgb, {effectiveColor} 4%, var(--color-bg-surface))); border-color: var(--color-border-subtle);"
+			class="flex items-center gap-2 border-b px-3 py-2"
+			style="border-radius: 7px 7px 0 0; background: linear-gradient(135deg, color-mix(in srgb, {effectiveColor} 12%, var(--color-bg-surface)), color-mix(in srgb, {effectiveColor} 4%, var(--color-bg-surface))); border-color: var(--color-border-subtle);"
 		>
 			<div
 				class="flex h-5 w-5 items-center justify-center rounded"

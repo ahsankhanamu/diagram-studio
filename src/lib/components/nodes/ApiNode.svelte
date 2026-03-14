@@ -15,7 +15,7 @@
 
 <BaseNode {id} {data} {selected} {color}>
 	{#snippet children()}
-		<div class="flex items-center gap-2 rounded-t-lg border-b px-3 py-2" style="background: linear-gradient(135deg, color-mix(in srgb, {color} 12%, var(--color-bg-surface)), color-mix(in srgb, {color} 4%, var(--color-bg-surface))); border-color: var(--color-border-subtle);">
+		<div class="flex items-center gap-2 border-b px-3 py-2" style="border-radius: 7px 7px 0 0; background: linear-gradient(135deg, color-mix(in srgb, {color} 12%, var(--color-bg-surface)), color-mix(in srgb, {color} 4%, var(--color-bg-surface))); border-color: var(--color-border-subtle);">
 			<div class="flex h-5 w-5 items-center justify-center rounded" style="background: color-mix(in srgb, {color} 25%, transparent); color: {color};">
 				<Globe size={11} />
 			</div>
