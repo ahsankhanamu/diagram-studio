@@ -6,7 +6,13 @@
 	import { viewport } from '$lib/stores/viewportStore';
 	import type { DiagramNode } from '$lib/types/diagram';
 
-	const show = $derived($selectedNodeCount === 1);
+	interface Props {
+		hidden?: boolean;
+	}
+
+	const { hidden = false }: Props = $props();
+
+	const show = $derived($selectedNodeCount === 1 && !hidden);
 
 	const selectedNode = $derived.by((): DiagramNode | null => {
 		if ($selectedNodeCount !== 1) return null;

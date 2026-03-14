@@ -154,8 +154,10 @@
 
 	// Track whether we already captured history for the current drag gesture
 	let dragHistoryPushed = false;
+	let nodeDragging = $state(false);
 
 	function handleNodeDragStart() {
+		nodeDragging = true;
 		if (!dragHistoryPushed) {
 			pushHistory();
 			dragHistoryPushed = true;
@@ -165,6 +167,7 @@
 	function handleNodeDragStop({ targetNode, nodes: draggedNodes, event }: { targetNode: Node | null; nodes: Node[]; event: MouseEvent | TouchEvent }) {
 		snapGuides = [];
 		dragHistoryPushed = false;
+		nodeDragging = false;
 
 		const altHeld = event instanceof MouseEvent && event.altKey;
 		const settings = $snapSettings;
@@ -543,7 +546,7 @@
 	<AlignmentToolbar />
 
 	<!-- Floating Node Toolbar (single selection) -->
-	<FloatingNodeToolbar />
+	<FloatingNodeToolbar hidden={nodeDragging} />
 
 
 	<!-- Canvas Toolbar (shapes + edge type) -->
