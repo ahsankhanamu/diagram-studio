@@ -276,7 +276,7 @@
 
 		{#if showExportDropdown}
 			<div
-				class="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border py-1 shadow-lg"
+				class="absolute right-0 top-full z-50 mt-1 min-w-[180px] whitespace-nowrap rounded-lg border py-1 shadow-lg"
 				style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
 			>
 				<button
