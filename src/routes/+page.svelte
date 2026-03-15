@@ -61,10 +61,14 @@
 		openWorkspace
 	} from '$lib/stores/workspaceStore';
 	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
+	import { startLinter } from '$lib/stores/linterStore';
+	import { isVSCodeWebview, postToExtension, onExtensionMessage } from '$lib/engine/vscode-bridge';
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
+	import LintPanel from '$lib/components/editor/LintPanel.svelte';
 
 	let loading = $state(true);
+	let vscodeMode = $state(false);
 	let activeFile = $state<string>('');
 	let syncStatus = $state<'connected' | 'disconnected' | 'syncing'>('disconnected');
 	let externalChangeToast = $state(false);
@@ -74,6 +78,7 @@
 	let editorRef: DiagramEditor | undefined = $state();
 	let savePending = false;
 	let suppressDimensionChanges = false;
+	let stopLinterFn: (() => void) | null = null;
 	// Snapshot tracking for safe saves
 	let lastWrittenSnapshot = '';  // canonical JSON of what we last wrote to disk
 	let lastDiskSnapshot = '';     // canonical JSON of what we last read from disk
@@ -96,31 +101,61 @@
 
 	// ── Lifecycle ──────────────────────────────────────────────────────
 
+	let removeVscodeListener: (() => void) | null = null;
+
 	onMount(async () => {
 		registerOnMutation(scheduleSave);
 		registerOnHistoryChange(scheduleSave);
-		await restoreWorkspace(false);
-		loading = false;
+		stopLinterFn = startLinter();
+
+		if (isVSCodeWebview()) {
+			vscodeMode = true;
+			// In VS Code mode, skip workspace picker — wait for diagram data via postMessage
+			removeVscodeListener = onExtensionMessage((msg) => {
+				if (msg.type === 'update' && msg.data) {
+					const diagram = msg.data as DiagramFile;
+					suppressDimensionChanges = true;
+					loadDiagramFlat(diagram);
+					requestAnimationFrame(() => {
+						if (diagram.viewport && (diagram.viewport.x !== 0 || diagram.viewport.y !== 0 || diagram.viewport.zoom !== 1)) {
+							setViewport(diagram.viewport);
+							requestAnimationFrame(() => editorRef?.restoreViewport(diagram.viewport));
+						} else {
+							requestAnimationFrame(() => editorRef?.fitView());
+						}
+						setTimeout(() => { suppressDimensionChanges = false; }, 500);
+					});
+				}
+			});
+			// Tell the extension we're ready
+			postToExtension('ready');
+			loading = false;
+		} else {
+			await restoreWorkspace(false);
+			loading = false;
+		}
 	});
 
 	onDestroy(() => {
 		unregisterOnMutation();
 		unregisterOnHistoryChange();
+		stopLinterFn?.();
 		clearTimeout(saveTimer);
 		fileWatcher?.stop();
 		dirWatcher?.stop();
+		removeVscodeListener?.();
 	});
 
 	// When workspace becomes ready, auto-open first file or create Untitled
 	$effect(() => {
-		if ($workspaceReady && $directoryHandle && !activeFile) {
+		if (!vscodeMode && $workspaceReady && $directoryHandle && !activeFile) {
 			autoOpenFile();
 		}
 	});
 
 	// Directory watcher: auto-refresh file explorer on external file additions/deletions
 	$effect(() => {
-		if ($workspaceReady && $directoryHandle) {
+		if (!vscodeMode && $workspaceReady && $directoryHandle) {
 			dirWatcher?.stop();
 			let debounceTimer: ReturnType<typeof setTimeout>;
 			dirWatcher = watchDirectory($directoryHandle, () => {
@@ -312,6 +347,26 @@
 	}
 
 	async function performSave() {
+		// VS Code mode: send diagram to extension host
+		if (vscodeMode) {
+			const currentSnapshot = buildCanonicalSnapshot(get(nodes), get(edges));
+			if (currentSnapshot === lastWrittenSnapshot) {
+				savePending = false;
+				return;
+			}
+			saveStatus.set('saving');
+			const diagram = buildDiagramFile();
+			if (!diagram) { savePending = false; return; }
+			diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
+			postToExtension('save', diagram);
+			lastWrittenSnapshot = currentSnapshot;
+			lastDiskSnapshot = currentSnapshot;
+			isDirty.set(false);
+			saveStatus.set('saved');
+			savePending = false;
+			return;
+		}
+
 		const file = activeFile;
 		const dirHandleVal = get(directoryHandle);
 
@@ -652,7 +707,7 @@
 
 {#if loading}
 	<!-- Loading -->
-{:else if !$workspaceReady}
+{:else if !vscodeMode && !$workspaceReady}
 	<!-- Workspace picker -->
 	<div class="flex h-screen items-center justify-center" style="background: var(--color-bg-primary);">
 		<div class="max-w-md text-center">
@@ -780,6 +835,7 @@
 				{:else}
 					<DiagramEditor bind:this={editorRef} onDrop={handleDrop} {suppressDimensionChanges} />
 				{/if}
+				<LintPanel />
 			</div>
 
 			<!-- Right resize handle -->

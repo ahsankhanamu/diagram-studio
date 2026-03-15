@@ -16,11 +16,13 @@
 		Eye,
 		Image,
 		FileJson,
-		Clipboard
+		Clipboard,
+		TriangleAlert
 	} from 'lucide-svelte';
 	import { saveStatus } from '$lib/stores/diagramStore';
 	import { canUndo, canRedo } from '$lib/stores/historyStore';
 	import { leftPanelOpen, rightPanelOpen, toggleLeftPanel, toggleRightPanel } from '$lib/stores/sidebarStore';
+	import { lintTotalCount, lintErrorCount, lintPanelOpen, toggleLintPanel } from '$lib/stores/linterStore';
 	import { workspaceName, openWorkspace } from '$lib/stores/workspaceStore';
 	import ThemeSelector from './ThemeSelector.svelte';
 
@@ -350,6 +352,21 @@
 		onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
 	>
 		<Save size={16} />
+	</button>
+
+	<!-- Lint toggle -->
+	<button
+		onclick={toggleLintPanel}
+		class="relative flex h-8 items-center gap-1.5 rounded-lg px-2 transition-colors"
+		style="color: {$lintErrorCount > 0 ? 'var(--color-error-text)' : $lintTotalCount > 0 ? 'var(--color-status-unsaved)' : 'var(--color-text-tertiary)'}; {$lintPanelOpen ? 'background: var(--color-hover-overlay);' : ''}"
+		title="Toggle problems panel ({$lintTotalCount} issue{$lintTotalCount === 1 ? '' : 's'})"
+		onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+		onmouseleave={(e) => { if (!$lintPanelOpen) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+	>
+		<TriangleAlert size={15} />
+		{#if $lintTotalCount > 0}
+			<span class="text-[11px] font-medium">{$lintTotalCount}</span>
+		{/if}
 	</button>
 
 	<div class="h-6 w-px" style="background: var(--color-border-primary);"></div>
