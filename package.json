@@ -3,10 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "mcp-server",
+    "vscode-extension"
+  ],
   "scripts": {
     "dev": "vite dev --port 3001",
     "build": "vite build",
-    "preview": "vite preview --port 3001"
+    "build:mcp": "npm run build --workspace=diagram-studio-mcp-server",
+    "build:vscode": "npm run build --workspace=diagram-studio-vscode",
+    "build:all": "npm run build && npm run build:mcp && npm run build:vscode",
+    "preview": "vite preview --port 3001",
+    "mcp:dev": "npm run dev --workspace=diagram-studio-mcp-server",
+    "mcp:start": "npm run start --workspace=diagram-studio-mcp-server"
   },
   "dependencies": {
     "@codemirror/lang-json": "^6.0.2",
