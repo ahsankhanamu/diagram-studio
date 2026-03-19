@@ -8,8 +8,58 @@ You are creating or modifying a **Diagram Studio** diagram. Instead of ASCII art
 
 1. **Read first.** If the user references an existing diagram, read the `.json` file before modifying it. Preserve fields you don't need to change.
 2. **Write the JSON file** to the current working directory (or a subdirectory the user specifies). Use filename: `<slug>.json` (e.g., `auth-flow.json`).
-3. **After writing**, tell the user: _"Open https://diagram-studio.vercel.app, point it at this folder, and you'll see your diagram. Any edits you make there save back to the same file — ask me to read it if you want me to continue from your changes."_
-4. **If the user says they edited the diagram**, re-read the file to pick up their changes before making further modifications.
+3. **Visual verification (when possible).** If the Playwright screenshot tool is available at `~/Downloads/diagram-iterations/screenshot.mjs` and the diagram-studio dev server is running at `localhost:3001`, use the visual feedback loop to verify and refine the diagram before presenting it to the user. See **Visual Feedback Loop** below.
+4. **After writing**, tell the user: _"Open https://diagram-studio.vercel.app, point it at this folder, and you'll see your diagram. Any edits you make there save back to the same file — ask me to read it if you want me to continue from your changes."_
+5. **If the user says they edited the diagram**, re-read the file to pick up their changes before making further modifications.
+
+### Visual Feedback Loop
+
+When the diagram-studio dev server is running at `localhost:3001`, use this two-phase loop to produce high-quality diagrams:
+
+```
+Write JSON → Detect defects (JSON) → Fix → Render PNG → Read PNG → Fix visuals → Done
+```
+
+**Phase 1 — Programmatic defect detection** (no browser needed):
+
+The screenshot tool at `~/Downloads/diagram-iterations/screenshot.mjs` runs pure JSON analysis to catch:
+- **Truncated text**: calculates if description fits at `(nodeWidth - 48px) / 6.5px` chars
+- **Node overlaps**: bounding box intersection check
+- **Tight horizontal spacing**: detects gaps < 40px between adjacent nodes
+- **Small architecture nodes**: flags nodes under 240px wide with descriptions
+- **Port convergence**: warns when > 4 edges converge on one port
+- **Section label collisions**: checks vertical gaps between text labels and nodes
+
+Fix ALL programmatic defects before moving to Phase 2.
+
+**Phase 2 — Visual rendering and verification**:
+
+The tool then renders a pixel-perfect PNG via the canvas renderer. Three ways to get the PNG:
+
+| Method | When to use |
+|--------|-------------|
+| `node ~/Downloads/diagram-iterations/screenshot.mjs <file> <output> [label]` | Full pipeline: defect report + canvas PNG |
+| `/preview` | Drop zone — drag-and-drop a .json file to preview + export PNG |
+| `/preview?path=/abs/path.json` | Interactive read-only preview (SvelteFlow, pan/zoom) |
+| `/preview?path=...&export` | Canvas-rendered PNG with Download button |
+| `/preview?path=...&download=true` | Auto-downloads the PNG (for automation) |
+
+Read the PNG (multimodal vision) and check for:
+- Edge labels overlapping nodes → remove label or add `centerX`/`centerY`
+- Edges routing through intermediate nodes → increase layer gap or change handles
+- U-shaped detours → switch to cross-side handles
+
+**Stop after 3 iterations** or when no defects remain.
+
+**Starting the dev server** (if not running):
+```bash
+cd ~/Desktop/projects/diagram-studio && npm run dev &
+```
+
+**Screenshot tool setup** (first time only):
+```bash
+cd ~/Downloads/diagram-iterations && npm install playwright && npx playwright install chromium
+```
 
 ## Argument
 
@@ -157,18 +207,55 @@ Use mixed-case alphanumeric characters (a-z, A-Z, 0-9). Each ID must be unique w
 
 Use a **top-to-bottom** flow by default (source `bottom` → target `top`). Space nodes on a grid:
 
-- **Vertical spacing**: 160px between rows
-- **Horizontal spacing**: 100px between columns
-- **Starting position**: (100, 50)
+- **Vertical spacing**: 160px between rows (gap from bottom of one row to top of next)
+- **Horizontal spacing**: 60px minimum between node edges (right edge to left edge of next column)
+- **Starting position**: (60, 50)
 - **Align nodes** in the same row to the same Y value
 - Leave extra space around decision nodes and nodes with many connections
 
 For **left-to-right** flows, use source `right` → target `left` with 160px horizontal spacing.
 
-For **architecture diagrams**, use a layered layout (200px between layers):
-- Top row: users/clients (y=50)
-- Middle row: services/APIs (y=250)
-- Bottom row: databases/queues (y=450)
+### Architecture diagram layout
+
+Architecture diagrams need **generous sizing and spacing** to be readable. The default node sizes (180x60) are too small — descriptions get truncated.
+
+**Node sizing (IMPORTANT):**
+- Use **260–320px wide** nodes for `service`, `api`, `user` types (not 180px default)
+- Use **90–110px tall** nodes that include a description (not 60px default)
+- Use **200px wide** for `database` nodes
+- Keep descriptions under **~50 characters** — longer text gets truncated with `...`
+- A good description is a short phrase, not a sentence: `"HTTP client — OAuth2 tokens, retry"` not `"HTTP client for ECAS API with OAuth2 token management, retry with exponential backoff, and response logging"`
+
+**Layer spacing:**
+- **200px vertical gap** between logical layers (e.g. controllers → services → orchestration)
+- **40px gap** between section `text` label and the first node below it
+- **60px horizontal gap** between columns of nodes
+
+**Section labels** (`text` type nodes):
+- Place **40px above** their associated nodes (e.g., `y=390` for label, `y=430` for nodes)
+- Never place a label at the same Y as a node — it will overlap
+- Use `borderColor` to color-code sections
+
+**Edge best practices for architecture diagrams:**
+- **Label only the most important edges** — unlabeled edges are cleaner for secondary connections
+- Use **`strokeWidth: 2`** for primary data flows, **`strokeWidth: 1`** for secondary/implied connections
+- Use **`bezier`** type for long-distance diagonal connections (e.g., a node in column 4 connecting to one in column 1) — it produces smooth curves instead of angular steps
+- Use **`smoothstep`** for direct vertical/horizontal connections within the same column
+- When many edges converge on one node, **distribute across ports** (some to `top`, some to `left`/`right`) to avoid a tangled mess at one port
+- Use **`dashed` stroke** for implied/secondary relationships
+- Avoid routing edges through nodes — if two layers are far apart, increase the gap rather than letting edges cross over intermediate nodes
+
+**Typical layer structure** (y positions for a 4-layer architecture):
+```
+Section label:  y=20,  nodes: y=60   (h=100)  — External Systems
+Section label:  y=200, nodes: y=250  (h=90)   — Auth/Middleware
+Section label:  y=390, nodes: y=430  (h=100)  — Controllers
+Section label:  y=590, nodes: y=630  (h=95)   — Core Services
+Section label:  y=790, nodes: y=830  (h=110)  — Orchestration
+Section label:  y=1000, nodes: y=1050 (h=95)  — Workers/Processors
+Section label:  y=1380, nodes: y=1420 (h=100) — Downstream Services
+```
+Add/remove layers as needed. The key principle: **leave at least 50px of empty space between the bottom of one layer's nodes and the top of the section label below.**
 
 ---
 
@@ -209,8 +296,12 @@ For **architecture diagrams**, use a layered layout (200px between layers):
 - [ ] Every edge has a unique `edge_<10chars>` ID
 - [ ] Edge `source`/`target` reference valid node IDs
 - [ ] Edge handles match enabled ports on their nodes
-- [ ] Nodes don't overlap (check positions + sizes)
+- [ ] Nodes don't overlap (check positions + sizes — verify `x + width + 60 < next_x` horizontally)
 - [ ] Terminal nodes only have `top` and `bottom` ports
 - [ ] Group nodes have all ports `false`
 - [ ] Entity nodes include `fields` array in `data`
 - [ ] Workflow nodes include `status` in `data`
+- [ ] For architecture diagrams: nodes are at least 260px wide and 90px tall (not default 180x60)
+- [ ] Descriptions are under ~50 characters (truncation occurs at node width)
+- [ ] Section labels have ≥50px clear space above and below neighboring layers
+- [ ] No more than 3–4 edges converge on a single port — distribute across ports if needed

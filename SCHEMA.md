@@ -144,18 +144,26 @@ Use mixed-case alphanumeric characters (a-z, A-Z, 0-9). Each ID must be unique w
 
 Use a **top-to-bottom** flow by default (source `bottom` → target `top`). Space nodes on a grid:
 
-- **Vertical spacing**: 160px between rows
-- **Horizontal spacing**: 100px between columns
-- **Starting position**: (100, 50)
+- **Vertical spacing**: 160px between rows (gap from bottom of one row to top of next)
+- **Horizontal spacing**: 60px minimum between node edges
+- **Starting position**: (60, 50)
 - **Align nodes** in the same row to the same Y value
 - Leave extra space around decision nodes and nodes with many connections
 
 For **left-to-right** flows, use source `right` → target `left` with 160px horizontal spacing.
 
-For **architecture diagrams**, use a layered layout (200px between layers):
-- Top row: users/clients (y=50)
-- Middle row: services/APIs (y=250)
-- Bottom row: databases/queues (y=450)
+### Architecture diagrams
+
+Architecture diagrams need **wider nodes and more spacing** than flowcharts:
+
+- **Node width**: 260–320px (not 180px default) — descriptions truncate at node width
+- **Node height**: 90–110px when including a description
+- **Descriptions**: Keep under ~50 characters to avoid truncation
+- **Layer gap**: 200px vertical between logical layers
+- **Section labels**: `text` nodes placed 40px above their layer, with ≥50px clear space from the layer above
+- **Edge labels**: Only label the most important edges; use unlabeled thin edges (strokeWidth: 1) for secondary connections
+- **Edge types**: Use `bezier` for long diagonal connections, `smoothstep` for same-column vertical connections
+- **Port distribution**: When many edges target one node, spread across `top`/`left`/`right` ports
 
 ---
 
