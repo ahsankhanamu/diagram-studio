@@ -4,6 +4,8 @@ import { generateId } from '$lib/utils';
 import { DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT } from '$lib/constants';
 import { nodeRegistry } from '$lib/components/nodes';
 import { defaultEdgeType } from '$lib/stores/edgePrefsStore';
+import { defaultHandleDistribution } from '$lib/stores/handleDistributionStore';
+import { reassignEdgeHandles } from '$lib/engine/handle-distribution';
 
 export const nodes = writable<Map<string, DiagramNode>>(new Map());
 export const edges = writable<Map<string, DiagramEdge>>(new Map());
@@ -32,6 +34,43 @@ export function notifyMutation() {
 	isDirty.set(true);
 	saveStatus.set('unsaved');
 	_onMutation?.();
+}
+
+// ── Handle distribution reassignment ────────────────────────────────
+/** Reassign indexed handle IDs for edges touching the given node IDs. */
+function runHandleReassignment(affectedNodeIds: Set<string>) {
+	const currentNodes = get_store_value(nodes);
+	const currentEdges = Array.from(get_store_value(edges).values());
+	const globalDist = get_store_value(defaultHandleDistribution);
+
+	const allUpdates = new Map<string, Partial<Pick<DiagramEdge, 'sourceHandle' | 'targetHandle'>>>();
+	for (const nodeId of affectedNodeIds) {
+		const nodeUpdates = reassignEdgeHandles(nodeId, currentNodes, currentEdges, globalDist);
+		for (const [edgeId, upd] of nodeUpdates) {
+			const existing = allUpdates.get(edgeId) || {};
+			allUpdates.set(edgeId, { ...existing, ...upd });
+		}
+	}
+
+	if (allUpdates.size > 0) {
+		edges.update(($e) => {
+			const map = new Map($e);
+			for (const [edgeId, upd] of allUpdates) {
+				const edge = map.get(edgeId);
+				if (edge) map.set(edgeId, { ...edge, ...upd });
+			}
+			return map;
+		});
+	}
+}
+
+/** Reassign handles for ALL nodes — call when global distribution default changes. */
+export function reassignAllHandles(): void {
+	const allNodeIds = new Set(get_store_value(nodes).keys());
+	if (allNodeIds.size > 0) {
+		runHandleReassignment(allNodeIds);
+		notifyMutation();
+	}
 }
 
 // ── Mutations ──────────────────────────────────────────────────────
@@ -65,6 +104,26 @@ export function addNode(
 }
 
 export function updateNode(id: string, updates: Partial<DiagramNode>): void {
+	// Check if handle distribution changed — need to reassign edge handles
+	let distributionChanged = false;
+	if (updates.data || updates.ports) {
+		const current = get_store_value(nodes).get(id);
+		if (current) {
+			const oldNodeDist = (current.data as Record<string, unknown>)?.handleDistribution;
+			const newNodeDist = updates.data ? (updates.data as Record<string, unknown>)?.handleDistribution : oldNodeDist;
+			if (oldNodeDist !== newNodeDist) distributionChanged = true;
+
+			if (updates.ports) {
+				for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+					const key = `${side}Distribution` as string;
+					const oldVal = (current.ports as Record<string, unknown>)?.[key];
+					const newVal = (updates.ports as Record<string, unknown>)?.[key];
+					if (oldVal !== newVal) { distributionChanged = true; break; }
+				}
+			}
+		}
+	}
+
 	nodes.update(($n) => {
 		const node = $n.get(id);
 		if (!node) return $n;
@@ -72,6 +131,11 @@ export function updateNode(id: string, updates: Partial<DiagramNode>): void {
 		map.set(id, { ...node, ...updates });
 		return map;
 	});
+
+	if (distributionChanged) {
+		runHandleReassignment(new Set([id]));
+	}
+
 	notifyMutation();
 }
 
@@ -149,6 +213,7 @@ export function addEdge(
 		map.set(id, edge);
 		return map;
 	});
+	runHandleReassignment(new Set([source, target]));
 	notifyMutation();
 	return id;
 }
@@ -165,11 +230,23 @@ export function updateEdge(id: string, updates: Partial<DiagramEdge>): void {
 }
 
 export function removeEdges(ids: string[]): void {
+	// Collect affected node IDs before deleting
+	const currentEdges = get_store_value(edges);
+	const affectedNodes = new Set<string>();
+	for (const id of ids) {
+		const edge = currentEdges.get(id);
+		if (edge) {
+			affectedNodes.add(edge.source);
+			affectedNodes.add(edge.target);
+		}
+	}
+
 	edges.update(($e) => {
 		const map = new Map($e);
 		for (const id of ids) map.delete(id);
 		return map;
 	});
+	if (affectedNodes.size > 0) runHandleReassignment(affectedNodes);
 	notifyMutation();
 }
 

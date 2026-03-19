@@ -79,7 +79,7 @@
 		border-style: {borderStyle === 'none' ? 'solid' : borderDash};
 		{borderStyle === 'none' ? 'border-color: transparent;' : ''}
 		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${effectiveColor} 30%, transparent), 0 4px 16px rgba(0,0,0,0.1)` : '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)'};
-		width: 100%; height: 100%;
+		width: 100%; height: 100%; overflow: hidden;
 		{customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}
 	"
 >
@@ -102,13 +102,13 @@
 			<EditableLabel {id} {label} class="flex-1 min-w-0 text-sm font-semibold leading-snug" style="color: var(--color-text-primary); overflow-wrap: break-word;" />
 		</div>
 		{#if data.description}
-			<div class="px-3 py-1.5">
-				<p class="text-xs leading-snug" style="color: var(--color-text-muted);">
+			<div class="px-3 py-1.5" style="overflow: hidden; min-height: 0;">
+				<p class="text-xs leading-snug" style="color: var(--color-text-muted); overflow-wrap: break-word; word-break: break-word;">
 					{data.description}
 				</p>
 			</div>
 		{/if}
 	{/if}
 
-	<NodeHandles {ports} {color} />
+	<NodeHandles {ports} {color} nodeId={id} />
 </div>

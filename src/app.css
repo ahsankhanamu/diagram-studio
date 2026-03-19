@@ -415,7 +415,7 @@ body {
 	overflow: visible;
 }
 
-/* Hover/selection: grow to arrow circle */
+/* Hover/selection: grow to arrow circle, pushed outside the node */
 .svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle,
 .svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle {
 	width: 22px;
@@ -425,6 +425,22 @@ body {
 	border: 1.5px solid color-mix(in srgb, var(--color-accent) 40%, var(--color-border-primary));
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 6px rgba(0, 0, 0, 0.05);
 	cursor: crosshair;
+}
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle.svelte-flow__handle-bottom,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle.svelte-flow__handle-bottom {
+	bottom: -11px;
+}
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle.svelte-flow__handle-top,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle.svelte-flow__handle-top {
+	top: -11px;
+}
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle.svelte-flow__handle-left,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle.svelte-flow__handle-left {
+	left: -11px;
+}
+.svelte-flow .svelte-flow__node:hover .svelte-flow__handle.freeform-handle.svelte-flow__handle-right,
+.svelte-flow .svelte-flow__node.selected .svelte-flow__handle.freeform-handle.svelte-flow__handle-right {
+	right: -11px;
 }
 
 /* Show arrow SVG inside handle when grown */

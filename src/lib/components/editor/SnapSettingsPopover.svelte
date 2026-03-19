@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { Magnet } from 'lucide-svelte';
 	import { snapSettings } from '$lib/stores/snapStore';
+	import { defaultHandleDistribution } from '$lib/stores/handleDistributionStore';
+	import { reassignAllHandles } from '$lib/stores/diagramStore';
+	import type { HandleDistributionMode } from '$lib/types/diagram';
 
 	let open = $state(false);
 
@@ -115,6 +118,29 @@
 					oninput={(e) => setThreshold(Number((e.currentTarget as HTMLInputElement).value))}
 					class="mt-1 w-full accent-[var(--color-accent)]"
 				/>
+			</div>
+
+			<div class="my-1 border-t" style="border-color: var(--color-border-primary);"></div>
+
+			<div class="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider" style="color: var(--color-text-tertiary);">
+				Handles
+			</div>
+
+			<div class="flex items-center justify-between px-3 py-1.5 text-xs" style="color: var(--color-text-secondary);">
+				<span>Distribution</span>
+				<select
+					value={$defaultHandleDistribution}
+					onchange={(e) => {
+						defaultHandleDistribution.set((e.currentTarget as HTMLSelectElement).value as HandleDistributionMode);
+						// Reassign all edge handles to match the new default
+						requestAnimationFrame(() => reassignAllHandles());
+					}}
+					class="h-5 rounded border px-1 text-[11px] outline-none"
+					style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
+				>
+					<option value="center">Center</option>
+					<option value="distributed">Distributed</option>
+				</select>
 			</div>
 		</div>
 	{/if}

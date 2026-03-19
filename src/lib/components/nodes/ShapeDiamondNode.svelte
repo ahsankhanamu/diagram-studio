@@ -59,5 +59,5 @@
 	</svg>
 	<EditableLabel {id} {label} class="relative z-10 text-sm font-medium text-center px-4" style="color: var(--color-text-primary); {customStyle?.fontSize ? `font-size: ${customStyle.fontSize}px;` : ''}" />
 
-	<NodeHandles {ports} {color} />
+	<NodeHandles {ports} {color} nodeId={id} />
 </div>

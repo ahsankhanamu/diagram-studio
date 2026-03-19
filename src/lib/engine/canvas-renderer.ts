@@ -1,5 +1,8 @@
-import type { DiagramNode, DiagramEdge } from '$lib/types/diagram';
+import type { DiagramNode, DiagramEdge, HandleDistributionMode } from '$lib/types/diagram';
 import { getSmoothStepPath, getBezierPath, getStraightPath, Position } from '@xyflow/svelte';
+import { get as getStoreValue } from 'svelte/store';
+import { resolveHandlePosition } from '$lib/engine/handle-distribution';
+import { defaultHandleDistribution } from '$lib/stores/handleDistributionStore';
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -973,15 +976,15 @@ const HANDLE_POSITION_MAP: Record<string, Position> = {
 	right: Position.Right,
 };
 
-function getHandlePosition(node: DiagramNode, handle: string, absPos: { x: number; y: number }): { x: number; y: number } {
-	const { width: w, height: h } = node.size;
-	switch (handle) {
-		case 'top': return { x: absPos.x + w / 2, y: absPos.y };
-		case 'bottom': return { x: absPos.x + w / 2, y: absPos.y + h };
-		case 'left': return { x: absPos.x, y: absPos.y + h / 2 };
-		case 'right': return { x: absPos.x + w, y: absPos.y + h / 2 };
-		default: return { x: absPos.x + w / 2, y: absPos.y + h };
-	}
+/** Parse handle ID like "bottom-2" to its Position enum. */
+function handleToPosition(handleId: string): Position {
+	const dash = handleId.indexOf('-');
+	const base = dash >= 0 ? handleId.substring(0, dash) : handleId;
+	return HANDLE_POSITION_MAP[base] ?? Position.Bottom;
+}
+
+function getHandlePosition(node: DiagramNode, handle: string, absPos: { x: number; y: number }, allEdges: DiagramEdge[], globalDist: HandleDistributionMode): { x: number; y: number } {
+	return resolveHandlePosition(node, absPos, handle, allEdges, globalDist);
 }
 
 // Lightweight SVG path parser for the subset used by @xyflow
@@ -1157,7 +1160,7 @@ function drawArrowhead(ctx: CanvasRenderingContext2D, x: number, y: number, angl
 	ctx.restore();
 }
 
-function drawEdge(ctx: CanvasRenderingContext2D, edge: DiagramEdge, nodeMap: Map<string, DiagramNode>, absPositions: Map<string, { x: number; y: number }>, theme: ThemeColors) {
+function drawEdge(ctx: CanvasRenderingContext2D, edge: DiagramEdge, nodeMap: Map<string, DiagramNode>, absPositions: Map<string, { x: number; y: number }>, theme: ThemeColors, allEdges: DiagramEdge[], globalDist: HandleDistributionMode) {
 	const sourceNode = nodeMap.get(edge.source);
 	const targetNode = nodeMap.get(edge.target);
 	if (!sourceNode || !targetNode) return;
@@ -1165,11 +1168,11 @@ function drawEdge(ctx: CanvasRenderingContext2D, edge: DiagramEdge, nodeMap: Map
 	const sourcePos = absPositions.get(edge.source)!;
 	const targetPos = absPositions.get(edge.target)!;
 
-	const sourceHandle = getHandlePosition(sourceNode, edge.sourceHandle || 'bottom', sourcePos);
-	const targetHandle = getHandlePosition(targetNode, edge.targetHandle || 'top', targetPos);
+	const sourceHandle = getHandlePosition(sourceNode, edge.sourceHandle || 'bottom', sourcePos, allEdges, globalDist);
+	const targetHandle = getHandlePosition(targetNode, edge.targetHandle || 'top', targetPos, allEdges, globalDist);
 
-	const sourcePosition = HANDLE_POSITION_MAP[edge.sourceHandle || 'bottom'] ?? Position.Bottom;
-	const targetPosition = HANDLE_POSITION_MAP[edge.targetHandle || 'top'] ?? Position.Top;
+	const sourcePosition = handleToPosition(edge.sourceHandle || 'bottom');
+	const targetPosition = handleToPosition(edge.targetHandle || 'top');
 
 	let pathResult: [string, number, number, number, number];
 	const edgeType = edge.type || 'smoothstep';
@@ -1350,9 +1353,12 @@ export function renderToCanvas(
 		drawNode(ctx, node, absPositions.get(node.id)!, theme);
 	}
 
+	// Read global distribution default
+	const globalDist = getStoreValue(defaultHandleDistribution);
+
 	// Draw edges
 	for (const edge of edges) {
-		drawEdge(ctx, edge, nodeMap, absPositions, theme);
+		drawEdge(ctx, edge, nodeMap, absPositions, theme, edges, globalDist);
 	}
 
 	// Draw non-group nodes

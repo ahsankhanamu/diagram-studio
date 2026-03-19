@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { Trash2, Type } from 'lucide-svelte';
 	import { selectedEdgeIds, selectedEdgeCount, clearSelection } from '$lib/stores/selectionStore';
-	import { edges, updateEdge, removeEdges } from '$lib/stores/diagramStore';
+	import { edges, edgeList, updateEdge, removeEdges } from '$lib/stores/diagramStore';
 	import { nodes } from '$lib/stores/diagramStore';
 	import { pushHistory } from '$lib/stores/historyStore';
 	import { viewport } from '$lib/stores/viewportStore';
-	import type { DiagramEdge } from '$lib/types/diagram';
+	import { defaultHandleDistribution } from '$lib/stores/handleDistributionStore';
+	import { resolveHandlePosition } from '$lib/engine/handle-distribution';
+	import type { DiagramEdge, DiagramNode } from '$lib/types/diagram';
 
 	const show = $derived($selectedEdgeCount === 1);
 
@@ -43,15 +45,11 @@
 		const sp = absPos(sourceNode);
 		const tp = absPos(targetNode);
 
-		// Get handle positions
-		function handlePos(node: { size: { width: number; height: number } }, abs: { x: number; y: number }, handle: string) {
-			switch (handle) {
-				case 'top': return { x: abs.x + node.size.width / 2, y: abs.y };
-				case 'bottom': return { x: abs.x + node.size.width / 2, y: abs.y + node.size.height };
-				case 'left': return { x: abs.x, y: abs.y + node.size.height / 2 };
-				case 'right': return { x: abs.x + node.size.width, y: abs.y + node.size.height / 2 };
-				default: return { x: abs.x + node.size.width / 2, y: abs.y + node.size.height };
-			}
+		// Get handle positions using distribution-aware engine
+		const allEdges = $edgeList;
+		const globalDist = $defaultHandleDistribution;
+		function handlePos(node: DiagramNode, abs: { x: number; y: number }, handle: string) {
+			return resolveHandlePosition(node, abs, handle, allEdges, globalDist);
 		}
 
 		const sh = handlePos(sourceNode, sp, selectedEdge.sourceHandle || 'bottom');

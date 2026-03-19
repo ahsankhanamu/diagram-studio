@@ -66,11 +66,17 @@ export interface Viewport {
 	zoom: number;
 }
 
+export type HandleDistributionMode = 'center' | 'distributed';
+
 export interface PortConfig {
 	top: boolean;
 	bottom: boolean;
 	left: boolean;
 	right: boolean;
+	topDistribution?: HandleDistributionMode;
+	bottomDistribution?: HandleDistributionMode;
+	leftDistribution?: HandleDistributionMode;
+	rightDistribution?: HandleDistributionMode;
 }
 
 export interface DiagramMetadata {

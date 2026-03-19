@@ -56,5 +56,5 @@
 >
 	<EditableLabel {id} {label} class="font-medium whitespace-pre-wrap" style="color: {customStyle?.borderColor || 'var(--color-text-primary)'};" />
 
-	<NodeHandles {ports} {color} />
+	<NodeHandles {ports} {color} nodeId={id} />
 </div>

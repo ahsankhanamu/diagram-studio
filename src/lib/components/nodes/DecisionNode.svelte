@@ -65,5 +65,5 @@
 		</span>
 	</div>
 
-	<NodeHandles {ports} {color} />
+	<NodeHandles {ports} {color} nodeId={id} />
 </div>

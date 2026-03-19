@@ -57,5 +57,5 @@
 	</svg>
 	<span class="absolute inset-0 flex items-center justify-center text-sm font-medium" style="color: var(--color-text-primary);"><EditableLabel {id} {label} /></span>
 
-	<NodeHandles {ports} {color} />
+	<NodeHandles {ports} {color} nodeId={id} />
 </div>

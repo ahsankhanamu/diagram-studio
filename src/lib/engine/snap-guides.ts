@@ -1,6 +1,9 @@
-import type { DiagramNode } from '$lib/types/diagram';
+import type { DiagramNode, DiagramEdge } from '$lib/types/diagram';
 import type { SnapSettings } from '$lib/stores/snapStore';
 import { SNAP_THRESHOLD, GRID_SIZE } from '$lib/constants';
+import { computeHandlePositions } from '$lib/engine/handle-distribution';
+import { get as getStoreValue } from 'svelte/store';
+import { defaultHandleDistribution } from '$lib/stores/handleDistributionStore';
 
 export interface GuideLine {
 	orientation: 'horizontal' | 'vertical';
@@ -18,17 +21,28 @@ interface SnapCandidate {
 	guide: GuideLine;
 }
 
-/** Get handle positions (absolute coordinates) for a node */
-function getHandlePositions(node: DiagramNode, pos?: { x: number; y: number }) {
-	const x = pos?.x ?? node.position.x;
-	const y = pos?.y ?? node.position.y;
+/** Get handle positions (absolute coordinates) for a node.
+ *  When edges are provided, uses distribution-aware positioning. */
+function getHandlePositions(node: DiagramNode, pos?: { x: number; y: number }, edges?: DiagramEdge[]) {
+	const absPos = { x: pos?.x ?? node.position.x, y: pos?.y ?? node.position.y };
+
+	if (edges) {
+		const globalDist = getStoreValue(defaultHandleDistribution);
+		return computeHandlePositions(node, absPos, edges, globalDist).map((h) => ({
+			x: h.x,
+			y: h.y,
+			port: h.side
+		}));
+	}
+
+	// Fallback: center-only (for legacy callers without edge data)
 	const w = node.size.width;
 	const h = node.size.height;
 	const handles: { x: number; y: number; port: string }[] = [];
-	if (node.ports.top) handles.push({ x: x + w / 2, y, port: 'top' });
-	if (node.ports.bottom) handles.push({ x: x + w / 2, y: y + h, port: 'bottom' });
-	if (node.ports.left) handles.push({ x, y: y + h / 2, port: 'left' });
-	if (node.ports.right) handles.push({ x: x + w, y: y + h / 2, port: 'right' });
+	if (node.ports.top) handles.push({ x: absPos.x + w / 2, y: absPos.y, port: 'top' });
+	if (node.ports.bottom) handles.push({ x: absPos.x + w / 2, y: absPos.y + h, port: 'bottom' });
+	if (node.ports.left) handles.push({ x: absPos.x, y: absPos.y + h / 2, port: 'left' });
+	if (node.ports.right) handles.push({ x: absPos.x + w, y: absPos.y + h / 2, port: 'right' });
 	return handles;
 }
 

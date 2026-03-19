@@ -5,7 +5,7 @@
 	import { rightPanelOpen, rightPanelWidth } from '$lib/stores/sidebarStore';
 	import { nodeRegistry } from '$lib/components/nodes';
 	import { pushHistory } from '$lib/stores/historyStore';
-	import type { MarkerType, StrokeStyle } from '$lib/types/diagram';
+	import type { MarkerType, StrokeStyle, HandleDistributionMode } from '$lib/types/diagram';
 
 	let selectedNode = $derived.by(() => {
 		const ids = $selectedNodeIds;
@@ -255,7 +255,63 @@
 				</div>
 			</div>
 
-			<!-- Node info (read-only) -->
+			<!-- Handle Distribution -->
+			<div class="border-t pt-3" style="border-color: var(--color-border-subtle);">
+				<label class="mb-2 block text-[11px] font-medium" style="color: var(--color-text-tertiary);">
+					Handle Distribution
+				</label>
+				<div class="space-y-2">
+					<div class="flex items-center justify-between">
+						<span class="text-[11px]" style="color: var(--color-text-muted);">Node Default</span>
+						<select
+							value={(selectedNode.data.handleDistribution as string) || ''}
+							onfocus={captureHistory}
+							onchange={(e) => {
+								const val = (e.target as HTMLSelectElement).value;
+								const newData = { ...selectedNode!.data };
+								if (val) newData.handleDistribution = val;
+								else delete newData.handleDistribution;
+								updateNode(selectedNode!.id, { data: newData });
+							}}
+							class="h-6 rounded border px-1.5 text-[11px] outline-none"
+							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
+						>
+							<option value="">Default</option>
+							<option value="center">Center</option>
+							<option value="distributed">Distributed</option>
+						</select>
+					</div>
+					{#each (['top', 'bottom', 'left', 'right'] as const) as side}
+						{#if selectedNode.ports[side]}
+							<div class="flex items-center justify-between">
+								<span class="text-[11px] capitalize" style="color: var(--color-text-muted);">{side}</span>
+								<select
+									value={selectedNode.ports[`${side}Distribution`] || ''}
+									onfocus={captureHistory}
+									onchange={(e) => {
+										const val = (e.target as HTMLSelectElement).value;
+										const ports = { ...selectedNode!.ports };
+										if (val) {
+											(ports as Record<string, unknown>)[`${side}Distribution`] = val;
+										} else {
+											delete (ports as Record<string, unknown>)[`${side}Distribution`];
+										}
+										updateNode(selectedNode!.id, { ports });
+									}}
+									class="h-6 rounded border px-1.5 text-[11px] outline-none"
+									style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
+								>
+									<option value="">Inherit</option>
+									<option value="center">Center</option>
+									<option value="distributed">Distributed</option>
+								</select>
+							</div>
+						{/if}
+					{/each}
+				</div>
+			</div>
+
+		<!-- Node info (read-only) -->
 			<div class="border-t pt-3" style="border-color: var(--color-border-subtle);">
 				<div class="flex items-center justify-between text-[10px]" style="color: var(--color-text-muted);">
 					<span>Type</span>
