@@ -45,13 +45,13 @@ export function toFlowNodes(diagramNodes: DiagramNode[], selectedIds?: Set<strin
 	});
 }
 
-function mapMarker(marker: MarkerType | undefined): { type: XYMarkerType; color?: string } | undefined {
+function mapMarker(marker: MarkerType | undefined): { type: XYMarkerType; color?: string; width?: number; height?: number } | undefined {
 	if (!marker || marker === 'none') return undefined;
 	const typeMap: Record<string, XYMarkerType> = {
 		arrow: 'arrow' as XYMarkerType,
 		arrowclosed: 'arrowclosed' as XYMarkerType,
 	};
-	return { type: typeMap[marker] || ('arrowclosed' as XYMarkerType) };
+	return { type: typeMap[marker] || ('arrowclosed' as XYMarkerType), width: 20, height: 20 };
 }
 
 /**
