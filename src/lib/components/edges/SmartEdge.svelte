@@ -2,6 +2,7 @@
 	import {
 		BaseEdge,
 		EdgeLabel,
+		EdgeReconnectAnchor,
 		getBezierPath,
 		getSmoothStepPath,
 		getStraightPath,
@@ -164,6 +165,16 @@
 	interactionWidth={40}
 	class={isAnimated ? 'edge-flow-animated' : ''}
 />
+
+<!-- Draggable hotpoints at source and target for reconnecting -->
+{#if selected}
+	<EdgeReconnectAnchor type="source" position={{ x: sourceX, y: sourceY }} class="edge-hotpoint">
+		<div class="edge-hotpoint-dot"></div>
+	</EdgeReconnectAnchor>
+	<EdgeReconnectAnchor type="target" position={{ x: targetX, y: targetY }} class="edge-hotpoint">
+		<div class="edge-hotpoint-dot"></div>
+	</EdgeReconnectAnchor>
+{/if}
 
 <!-- Drag overlay — always present on smoothstep/step for wider hit area + drag when selected -->
 {#if isSmoothOrStep}
