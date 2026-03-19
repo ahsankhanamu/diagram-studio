@@ -115,6 +115,9 @@
 	const currentStrokeStyle = $derived(selectedEdge?.strokeStyle || 'solid');
 	const currentStrokeWidth = $derived(selectedEdge?.strokeWidth ?? 1.5);
 
+	let strokeStyleOpen = $state(false);
+	let strokeWidthOpen = $state(false);
+
 	function setEdgeType(value: string) {
 		if (!selectedEdge) return;
 		pushHistory();
@@ -196,44 +199,80 @@
 
 		<div class="toolbar-sep"></div>
 
-		<!-- Stroke style -->
-		<div class="toolbar-strokes">
-			{#each strokeStyles as ss}
-				<button
-					class="stroke-btn"
-					class:stroke-btn-active={currentStrokeStyle === ss.value}
-					title={ss.label}
-					onclick={() => setStrokeStyle(ss.value)}
-				>
-					<svg width="20" height="10" viewBox="0 0 20 10">
-						{#if ss.value === 'solid'}
-							<line x1="1" y1="5" x2="19" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-						{:else if ss.value === 'dashed'}
-							<line x1="1" y1="5" x2="19" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3" />
-						{:else}
-							<line x1="1" y1="5" x2="19" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1.5 3" />
-						{/if}
-					</svg>
-				</button>
-			{/each}
+		<!-- Stroke style — split button -->
+		<div class="split-btn" class:split-btn-open={strokeStyleOpen}>
+			<button
+				class="split-btn-main"
+				title="Stroke style: {currentStrokeStyle}"
+				onclick={() => { strokeStyleOpen = !strokeStyleOpen; strokeWidthOpen = false; }}
+			>
+				<svg width="24" height="10" viewBox="0 0 24 10">
+					{#if currentStrokeStyle === 'solid'}
+						<line x1="1" y1="5" x2="23" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+					{:else if currentStrokeStyle === 'dashed'}
+						<line x1="1" y1="5" x2="23" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3" />
+					{:else}
+						<line x1="1" y1="5" x2="23" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1.5 3" />
+					{/if}
+				</svg>
+				<svg class="split-chevron" width="8" height="8" viewBox="0 0 8 8"><path d="M2 3l2 2 2-2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+			</button>
+			{#if strokeStyleOpen}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<button class="split-backdrop" onclick={() => (strokeStyleOpen = false)} aria-label="Close"></button>
+				<div class="split-dropdown">
+					{#each strokeStyles as ss}
+						<button
+							class="split-option"
+							class:split-option-active={currentStrokeStyle === ss.value}
+							onclick={() => { setStrokeStyle(ss.value); strokeStyleOpen = false; }}
+						>
+							<svg width="32" height="10" viewBox="0 0 32 10">
+								{#if ss.value === 'solid'}
+									<line x1="1" y1="5" x2="31" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+								{:else if ss.value === 'dashed'}
+									<line x1="1" y1="5" x2="31" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 3" />
+								{:else}
+									<line x1="1" y1="5" x2="31" y2="5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="1.5 3" />
+								{/if}
+							</svg>
+							<span class="split-label">{ss.label}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
-		<div class="toolbar-sep"></div>
-
-		<!-- Stroke width -->
-		<div class="toolbar-widths">
-			{#each strokeWidths as sw}
-				<button
-					class="width-btn"
-					class:width-btn-active={currentStrokeWidth === sw.value}
-					title={sw.label}
-					onclick={() => setStrokeWidth(sw.value)}
-				>
-					<svg width="16" height="10" viewBox="0 0 16 10">
-						<line x1="1" y1="5" x2="15" y2="5" stroke="currentColor" stroke-width={sw.value * 1.2} stroke-linecap="round" />
-					</svg>
-				</button>
-			{/each}
+		<!-- Stroke width — split button -->
+		<div class="split-btn" class:split-btn-open={strokeWidthOpen}>
+			<button
+				class="split-btn-main"
+				title="Stroke width: {currentStrokeWidth}"
+				onclick={() => { strokeWidthOpen = !strokeWidthOpen; strokeStyleOpen = false; }}
+			>
+				<svg width="20" height="10" viewBox="0 0 20 10">
+					<line x1="1" y1="5" x2="19" y2="5" stroke="currentColor" stroke-width={currentStrokeWidth * 1.2} stroke-linecap="round" />
+				</svg>
+				<svg class="split-chevron" width="8" height="8" viewBox="0 0 8 8"><path d="M2 3l2 2 2-2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+			</button>
+			{#if strokeWidthOpen}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<button class="split-backdrop" onclick={() => (strokeWidthOpen = false)} aria-label="Close"></button>
+				<div class="split-dropdown">
+					{#each strokeWidths as sw}
+						<button
+							class="split-option"
+							class:split-option-active={currentStrokeWidth === sw.value}
+							onclick={() => { setStrokeWidth(sw.value); strokeWidthOpen = false; }}
+						>
+							<svg width="32" height="12" viewBox="0 0 32 12">
+								<line x1="1" y1="6" x2="31" y2="6" stroke="currentColor" stroke-width={sw.value * 1.5} stroke-linecap="round" />
+							</svg>
+							<span class="split-label">{sw.label}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		<div class="toolbar-sep"></div>
@@ -348,35 +387,92 @@
 		color: var(--color-accent);
 	}
 
-	.toolbar-strokes, .toolbar-widths {
+	/* Split buttons for stroke style & width */
+	.split-btn {
+		position: relative;
 		display: flex;
 		align-items: center;
-		gap: 2px;
-		padding: 0 2px;
 	}
-
-	.stroke-btn, .width-btn {
+	.split-btn-main {
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 24px;
+		gap: 3px;
+		height: 26px;
+		padding: 0 4px 0 8px;
+		border-radius: 6px;
+		border: 1px solid var(--color-border-primary);
+		background: var(--color-bg-surface);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+	}
+	.split-btn-main:hover {
+		background: var(--color-hover-overlay);
+		color: var(--color-text-primary);
+		border-color: var(--color-border-primary);
+	}
+	.split-btn-open .split-btn-main {
+		background: color-mix(in srgb, var(--color-accent) 10%, var(--color-bg-surface));
+		border-color: var(--color-accent);
+		color: var(--color-accent);
+	}
+	.split-chevron {
+		opacity: 0.4;
+		flex-shrink: 0;
+	}
+	.split-btn-main:hover .split-chevron,
+	.split-btn-open .split-chevron {
+		opacity: 0.8;
+	}
+	.split-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 49;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+	.split-dropdown {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 50;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 4px;
+		border-radius: 8px;
+		background: color-mix(in srgb, var(--color-bg-surface) 95%, transparent);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
+		border: 1px solid var(--color-border-primary);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+		animation: float-in 0.15s ease-out;
+		white-space: nowrap;
+	}
+	.split-option {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 10px;
 		border-radius: 5px;
 		border: none;
 		background: transparent;
-		color: var(--color-text-muted);
+		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition: background-color 0.12s, color 0.12s;
+		transition: background-color 0.1s, color 0.1s;
 	}
-
-	.stroke-btn:hover, .width-btn:hover {
+	.split-option:hover {
 		background: var(--color-hover-overlay);
 		color: var(--color-text-primary);
 	}
-
-	.stroke-btn-active, .width-btn-active {
-		background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+	.split-option-active {
+		background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 		color: var(--color-accent);
+	}
+	.split-label {
+		font-size: 11px;
 	}
 
 	.toolbar-btn {
