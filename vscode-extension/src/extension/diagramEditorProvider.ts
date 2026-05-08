@@ -4,6 +4,11 @@ import * as fs from "fs";
 
 export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
   private static readonly viewType = "diagramStudio.diagramEditor";
+  private static activePanels = new Map<string, vscode.WebviewPanel>();
+
+  public static getActivePanel(): vscode.WebviewPanel | undefined {
+    return DiagramEditorProvider.activePanels.values().next().value;
+  }
 
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
     const provider = new DiagramEditorProvider(context);
@@ -58,7 +63,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     const messageDisposable = webviewPanel.webview.onDidReceiveMessage(
-      (message) => {
+      async (message) => {
         switch (message.type) {
           case "ready":
             updateWebview();
@@ -76,6 +81,30 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
             vscode.workspace.applyEdit(edit);
             return;
           }
+          case "exportPng": {
+            const { data, filename } = message.data as { data: string; filename: string };
+            const dir = path.dirname(document.uri.fsPath);
+            const uri = await vscode.window.showSaveDialog({
+              defaultUri: vscode.Uri.file(path.join(dir, `${filename}.png`)),
+              filters: { "PNG Image": ["png"] },
+            });
+            if (uri) {
+              await vscode.workspace.fs.writeFile(uri, Buffer.from(data, "base64"));
+            }
+            return;
+          }
+          case "exportHtml": {
+            const { content, filename } = message.data as { content: string; filename: string };
+            const dir = path.dirname(document.uri.fsPath);
+            const uri = await vscode.window.showSaveDialog({
+              defaultUri: vscode.Uri.file(path.join(dir, `${filename}.html`)),
+              filters: { "HTML File": ["html"] },
+            });
+            if (uri) {
+              await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf-8"));
+            }
+            return;
+          }
         }
       }
     );
@@ -90,7 +119,10 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
       updateWebview();
     });
 
+    // Track active panels so export-all can use any open webview
+    DiagramEditorProvider.activePanels.set(document.uri.toString(), webviewPanel);
     webviewPanel.onDidDispose(() => {
+      DiagramEditorProvider.activePanels.delete(document.uri.toString());
       messageDisposable.dispose();
       changeDisposable.dispose();
     });

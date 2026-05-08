@@ -16,6 +16,8 @@
 		Eye,
 		Image,
 		FileJson,
+		FileCode,
+		Globe,
 		Clipboard,
 		TriangleAlert
 	} from 'lucide-svelte';
@@ -31,10 +33,13 @@
 		diagramType: string;
 		syncStatus?: 'connected' | 'disconnected' | 'syncing';
 		showJsonEditor?: boolean;
+		isVSCode?: boolean;
 		onSave?: () => void;
 		onImport?: () => void;
 		onExportJson?: () => void;
 		onExportPng?: () => void;
+		onExportHtml?: () => void;
+		onExportAllHtml?: () => void;
 		onCopyImage?: () => void;
 		onAutoLayout?: (direction: 'TB' | 'LR') => void;
 		onUndo?: () => void;
@@ -48,10 +53,13 @@
 		diagramType,
 		syncStatus = 'disconnected',
 		showJsonEditor = false,
+		isVSCode = false,
 		onSave,
 		onImport,
 		onExportJson,
 		onExportPng,
+		onExportHtml,
+		onExportAllHtml,
 		onCopyImage,
 		onAutoLayout,
 		onUndo,
@@ -278,7 +286,7 @@
 
 		{#if showExportDropdown}
 			<div
-				class="absolute right-0 top-full z-50 mt-1 min-w-[180px] whitespace-nowrap rounded-lg border py-1 shadow-lg"
+				class="absolute right-0 top-full z-50 mt-1 min-w-[200px] whitespace-nowrap rounded-lg border py-1 shadow-lg"
 				style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
 			>
 				<button
@@ -304,6 +312,16 @@
 				</button>
 				<div class="mx-2 my-1 h-px" style="background: var(--color-border-primary);"></div>
 				<button
+					onclick={() => { onExportHtml?.(); showExportDropdown = false; }}
+					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+					style="color: var(--color-text-secondary);"
+					onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+					onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+				>
+					<FileCode size={14} />
+					Export as HTML
+				</button>
+				<button
 					onclick={() => { onExportJson?.(); showExportDropdown = false; }}
 					class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
 					style="color: var(--color-text-secondary);"
@@ -313,6 +331,19 @@
 					<FileJson size={14} />
 					Export JSON
 				</button>
+				{#if !isVSCode}
+					<div class="mx-2 my-1 h-px" style="background: var(--color-border-primary);"></div>
+					<button
+						onclick={() => { onExportAllHtml?.(); showExportDropdown = false; }}
+						class="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+						style="color: var(--color-text-secondary);"
+						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+						onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+					>
+						<Globe size={14} />
+						Export All as HTML
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</div>

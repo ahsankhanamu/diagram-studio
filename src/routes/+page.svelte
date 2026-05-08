@@ -39,8 +39,8 @@
 	import { copySelected, paste } from '$lib/stores/clipboardStore';
 	import { editingNodeId } from '$lib/stores/editStore';
 	import { autoLayout, type LayoutDirection } from '$lib/engine/layout';
-	import { exportJson, importDiagramFile } from '$lib/engine/export';
-	import { exportCanvasPng, copyCanvasToClipboard } from '$lib/engine/canvas-renderer';
+	import { exportJson, importDiagramFile, exportHtml, exportMultiHtml, generateDiagramHtml, generateMultiDiagramHtml, type HtmlExportItem } from '$lib/engine/export';
+	import { exportCanvasPng, copyCanvasToClipboard, renderToCanvas } from '$lib/engine/canvas-renderer';
 	import {
 		readDiagramFile,
 		writeDiagramFile,
@@ -57,6 +57,7 @@
 	import {
 		directoryHandle,
 		workspaceReady,
+		workspaceName,
 		restoreWorkspace,
 		openWorkspace
 	} from '$lib/stores/workspaceStore';
@@ -66,6 +67,7 @@
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
 	import LintPanel from '$lib/components/editor/LintPanel.svelte';
+	import ExportHtmlDialog from '$lib/components/editor/ExportHtmlDialog.svelte';
 
 	let loading = $state(true);
 	let vscodeMode = $state(false);
@@ -84,6 +86,8 @@
 	let lastDiskSnapshot = '';     // canonical JSON of what we last read from disk
 	let createdAt = $state('');
 	let showJsonEditor = $state(false);
+	let showExportDialog = $state(false);
+	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
 
 	// ── Autosave: direct callback from mutations ──────────────────────
 	// No $effect, no subscriptions, no reactivity.
@@ -125,6 +129,15 @@
 						}
 						setTimeout(() => { suppressDimensionChanges = false; }, 500);
 					});
+				} else if (msg.type === 'exportAll' && msg.data) {
+					const { diagrams, title } = msg.data as { diagrams: DiagramFile[]; title: string };
+					const items: HtmlExportItem[] = diagrams.map((d) => ({
+						diagram: d,
+						nodes: d.nodes,
+						edges: d.edges
+					}));
+					const html = generateMultiDiagramHtml(items, title);
+					postToExtension('exportAllResult', { content: html });
 				}
 			});
 			// Tell the extension we're ready
@@ -499,7 +512,73 @@
 		if (currentNodes.length === 0) return;
 		const meta = get(diagramMeta);
 		const name = meta?.name || 'diagram';
+
+		if (vscodeMode) {
+			const canvas = renderToCanvas(currentNodes, currentEdges, { scale: 2, padding: 40 });
+			const base64 = canvas.toDataURL('image/png').split(',')[1];
+			postToExtension('exportPng', { data: base64, filename: name });
+			return;
+		}
+
 		await exportCanvasPng(currentNodes, currentEdges, name, { scale: 2, padding: 40 });
+	}
+
+	async function handleExportHtml() {
+		const currentNodes = Array.from(get(nodes).values());
+		const currentEdges = Array.from(get(edges).values());
+		const diagram = buildDiagramFile();
+		if (!diagram) return;
+
+		if (vscodeMode) {
+			const html = generateDiagramHtml(diagram, currentNodes, currentEdges);
+			postToExtension('exportHtml', { content: html, filename: diagram.name });
+			return;
+		}
+
+		await exportHtml(diagram, currentNodes, currentEdges);
+	}
+
+	async function handleExportAllHtml() {
+		const dirHandleVal = get(directoryHandle);
+		if (!dirHandleVal) return;
+
+		const { listEntries, readDiagramFile } = await import('$lib/engine/fs-access');
+
+		async function collectFiles(
+			dh: FileSystemDirectoryHandle,
+			prefix = ''
+		): Promise<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile }>> {
+			const result: Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile }> = [];
+			const entries = await listEntries(dh);
+			for (const entry of entries) {
+				if (entry.kind === 'file') {
+					const d = await readDiagramFile(dh, entry.name);
+					if (d) result.push({
+						name: d.name || entry.name,
+						fileName: prefix ? `${prefix}/${entry.name}` : entry.name,
+						diagramType: d.diagramType || 'flowchart',
+						diagram: d
+					});
+				} else if (entry.kind === 'directory') {
+					const subDh = await dh.getDirectoryHandle(entry.name);
+					result.push(...(await collectFiles(subDh, prefix ? `${prefix}/${entry.name}` : entry.name)));
+				}
+			}
+			return result;
+		}
+
+		const fileList = await collectFiles(dirHandleVal);
+		if (fileList.length === 0) return;
+
+		exportDialogFiles = fileList.map((f) => ({ ...f, checked: true }));
+		showExportDialog = true;
+	}
+
+	async function handleDialogExport(selected: DiagramFile[]) {
+		showExportDialog = false;
+		const items: HtmlExportItem[] = selected.map((d) => ({ diagram: d, nodes: d.nodes, edges: d.edges }));
+		const wsName = get(workspaceName) || 'Diagrams';
+		await exportMultiHtml(items, wsName);
 	}
 
 	async function handleCopyImage() {
@@ -747,10 +826,13 @@
 			diagramType={$diagramMeta?.diagramType ?? 'flowchart'}
 			{syncStatus}
 			{showJsonEditor}
+			isVSCode={vscodeMode}
 			onSave={handleSave}
 			onImport={handleImport}
 			onExportJson={handleExportJson}
 			onExportPng={handleExportPng}
+			onExportHtml={handleExportHtml}
+			onExportAllHtml={handleExportAllHtml}
 			onCopyImage={handleCopyImage}
 			onAutoLayout={handleAutoLayout}
 			onUndo={() => undo()}
@@ -857,4 +939,13 @@
 			</div>
 		{/if}
 	</div>
+
+	<!-- HTML export selection dialog -->
+	{#if showExportDialog}
+		<ExportHtmlDialog
+			files={exportDialogFiles}
+			onExport={handleDialogExport}
+			onClose={() => { showExportDialog = false; }}
+		/>
+	{/if}
 {/if}

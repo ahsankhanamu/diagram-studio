@@ -1,16 +1,11 @@
-import type { DiagramFile } from '$lib/types/diagram';
+import type { DiagramFile, DiagramNode, DiagramEdge } from '$lib/types/diagram';
+import { renderToSvg } from './svg-renderer';
+import { VIEWER_CSS, VIEWER_SCRIPT, viewerHtml } from './html-viewer';
 
-/**
- * Check if the File System Access API is available
- */
 export function hasFileSystemAccess(): boolean {
 	return typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 }
 
-/**
- * Save content using File System Access API with native OS save dialog.
- * Falls back to blob download if the API is unavailable or user cancels.
- */
 async function saveWithFSA(
 	content: string,
 	suggestedName: string,
@@ -18,16 +13,12 @@ async function saveWithFSA(
 ): Promise<boolean> {
 	if (!hasFileSystemAccess()) return false;
 	try {
-		const handle = await (window as any).showSaveFilePicker({
-			suggestedName,
-			types
-		});
+		const handle = await (window as any).showSaveFilePicker({ suggestedName, types });
 		const writable = await handle.createWritable();
 		await writable.write(content);
 		await writable.close();
 		return true;
 	} catch (err: any) {
-		// User cancelled the dialog
 		if (err?.name === 'AbortError') return true;
 		return false;
 	}
@@ -77,7 +68,6 @@ export async function exportPng(
 			ctx.scale(scale, scale);
 			ctx.drawImage(img, 0, 0);
 			URL.revokeObjectURL(url);
-
 			canvas.toBlob((blob) => {
 				if (blob) downloadBlob(blob, `${filename}.png`);
 				resolve();
@@ -87,17 +77,11 @@ export async function exportPng(
 	});
 }
 
-/**
- * Import a diagram JSON file using File System Access API (native open dialog).
- * Falls back to a file input element if the API is unavailable.
- */
 export async function importDiagramFile(): Promise<DiagramFile | null> {
 	if (hasFileSystemAccess()) {
 		try {
 			const [handle] = await (window as any).showOpenFilePicker({
-				types: [
-					{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }
-				],
+				types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
 				multiple: false
 			});
 			const file = await handle.getFile();
@@ -105,11 +89,9 @@ export async function importDiagramFile(): Promise<DiagramFile | null> {
 			return JSON.parse(text) as DiagramFile;
 		} catch (err: any) {
 			if (err?.name === 'AbortError') return null;
-			// Fall through to legacy
 		}
 	}
 
-	// Legacy fallback using file input
 	return new Promise((resolve) => {
 		const input = document.createElement('input');
 		input.type = 'file';
@@ -127,6 +109,187 @@ export async function importDiagramFile(): Promise<DiagramFile | null> {
 		input.click();
 	});
 }
+
+// ── HTML Export ────────────────────────────────────────────────────
+
+function escapeHtml(str: string): string {
+	return str
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+
+
+const HTML_STYLES = `
+  :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --accent:#2563eb; --sidebar:#f9fafb; }
+  *{box-sizing:border-box}
+  body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--text);background:var(--bg);margin:0}
+  h1{font-size:22px;font-weight:700;margin:0 0 6px}
+  .blurb{color:var(--muted);margin:0 0 20px;max-width:820px}
+  .empty{padding:48px;text-align:center;color:var(--muted);font-size:14px}
+  .meta{margin-top:20px;font-size:12px;color:var(--muted)}
+  .meta a{color:var(--accent);text-decoration:none}
+  .meta a:hover{text-decoration:underline}
+  ${VIEWER_CSS}
+`;
+
+const MULTI_STYLES = `
+  :root { --bg:#fff; --text:#1f2937; --muted:#6b7280; --border:#e5e7eb; --accent:#2563eb; --sidebar:#f9fafb; }
+  *{box-sizing:border-box}
+  body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:var(--text);background:var(--bg);margin:0}
+  .layout{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+  aside{position:sticky;top:0;align-self:start;height:100vh;display:flex;flex-direction:column;background:var(--sidebar);border-right:1px solid var(--border);overflow:hidden}
+  .aside-nav{flex:1;overflow-y:auto;padding:24px 20px}
+  .aside-nav::-webkit-scrollbar{width:4px} .aside-nav::-webkit-scrollbar-track{background:transparent} .aside-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  aside .ws-title{font-size:15px;font-weight:700;color:var(--text);margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border);line-height:1.3;word-break:break-word}
+  aside h1{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px}
+  aside ol{list-style:none;padding:0;margin:0}
+  aside li{margin:2px 0}
+  aside a{color:var(--text);text-decoration:none;display:block;padding:6px 8px;border-radius:6px;font-size:13px;line-height:1.4;transition:background .12s,color .12s}
+  aside a:hover,aside a.active{background:#eef2ff;color:var(--accent)}
+  .aside-footer{flex-shrink:0;padding:12px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+  .aside-footer a{color:var(--accent);text-decoration:none}
+  .aside-footer a:hover{text-decoration:underline}
+  main{padding:32px 40px 80px;width:100%}
+  main h2{font-size:17px;font-weight:600;margin:0 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+  .blurb{color:var(--muted);margin:0 0 16px;max-width:820px;font-size:13px}
+  section{margin-bottom:56px;scroll-margin-top:16px}
+  @media(max-width:700px){.layout{grid-template-columns:1fr} aside{display:none} main{padding:20px 20px 60px}}
+  ${VIEWER_CSS}
+`;
+
+
+export interface HtmlExportItem {
+	diagram: DiagramFile;
+	nodes: DiagramNode[];
+	edges: DiagramEdge[];
+}
+
+export function generateDiagramHtml(
+	diagram: DiagramFile,
+	nodes: DiagramNode[],
+	edges: DiagramEdge[]
+): string {
+	const svgContent = nodes.length > 0 ? renderToSvg(nodes, edges, { padding: 40 }) : null;
+	const now = new Date().toLocaleString();
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(diagram.name)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>${HTML_STYLES}</style>
+</head>
+<body style="padding:40px 48px 80px;max-width:1100px;margin:0 auto">
+  <h1>${escapeHtml(diagram.name)}</h1>
+  ${diagram.description ? `<p class="blurb">${escapeHtml(diagram.description)}</p>` : ''}
+  ${viewerHtml('dv0', svgContent)}
+  <p class="meta">Exported from <a href="https://diagram-studio.vercel.app/" target="_blank" rel="noopener">Diagram Studio</a> · ${now}</p>
+${VIEWER_SCRIPT}
+</body>
+</html>`;
+}
+
+export async function exportHtml(
+	diagram: DiagramFile,
+	nodes: DiagramNode[],
+	edges: DiagramEdge[]
+): Promise<void> {
+	const html = generateDiagramHtml(diagram, nodes, edges);
+	const saved = await saveWithFSA(html, `${diagram.name}.html`, [
+		{ description: 'HTML Files', accept: { 'text/html': ['.html'] } }
+	]);
+	if (!saved) {
+		downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${diagram.name}.html`);
+	}
+}
+
+export function generateMultiDiagramHtml(
+	items: HtmlExportItem[],
+	title: string = 'Diagrams'
+): string {
+	const rendered = items.map(({ diagram, nodes, edges }, i) => ({
+		diagram,
+		svgContent: nodes.length > 0 ? renderToSvg(nodes, edges, { padding: 40, idPrefix: `dv${i}` }) : null,
+	}));
+
+	const now = new Date().toLocaleString();
+	const navLinks = rendered
+		.map(({ diagram }, i) => `<li><a href="#d${i}" data-target="d${i}">${escapeHtml(diagram.name)}</a></li>`)
+		.join('\n      ');
+
+	const sections = rendered
+		.map(({ diagram, svgContent }, i) => `
+  <section id="d${i}">
+    <h2>${escapeHtml(diagram.name)}</h2>
+    ${diagram.description ? `<p class="blurb">${escapeHtml(diagram.description)}</p>` : ''}
+    ${viewerHtml(`dv${i}`, svgContent)}
+  </section>`)
+		.join('\n');
+
+	const navScript = `
+<script>
+(function(){
+  var links=document.querySelectorAll('aside a[data-target]');
+  var sections=document.querySelectorAll('section[id]');
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(l){l.classList.toggle('active',l.dataset.target===e.target.id);});
+      }
+    });
+  },{threshold:0.2,rootMargin:'-10% 0px -70% 0px'});
+  sections.forEach(function(s){obs.observe(s);});
+})();
+<\/script>`;
+
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>${MULTI_STYLES}</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="aside-nav">
+      <p class="ws-title">${escapeHtml(title)}</p>
+      <h1>Diagrams (${rendered.length})</h1>
+      <ol>
+        ${navLinks}
+      </ol>
+    </div>
+    <div class="aside-footer">Exported ${now}<br><a href="https://diagram-studio.vercel.app/" target="_blank" rel="noopener">diagram-studio.vercel.app</a></div>
+  </aside>
+  <main>${sections}
+  </main>
+</div>
+${VIEWER_SCRIPT}
+${navScript}
+</body>
+</html>`;
+}
+
+export async function exportMultiHtml(
+	items: HtmlExportItem[],
+	title: string = 'Diagrams'
+): Promise<void> {
+	const html = generateMultiDiagramHtml(items, title);
+	const saved = await saveWithFSA(html, `${title}.html`, [
+		{ description: 'HTML Files', accept: { 'text/html': ['.html'] } }
+	]);
+	if (!saved) {
+		downloadBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), `${title}.html`);
+	}
+}
+
+// ── Blob download ──────────────────────────────────────────────────
 
 function downloadBlob(blob: Blob, filename: string): void {
 	const url = URL.createObjectURL(blob);

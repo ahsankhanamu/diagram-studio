@@ -16,6 +16,7 @@ export function autoLayout(
 		rankdir: direction,
 		nodesep: 60,
 		ranksep: 80,
+		edgesep: 30,
 		marginx: 40,
 		marginy: 40
 	});
@@ -28,7 +29,13 @@ export function autoLayout(
 	}
 
 	for (const edge of edges) {
-		g.setEdge(edge.source, edge.target);
+		if (edge.label) {
+			// Reserve space around the label so it doesn't overlap nodes or other edges
+			const labelW = Math.round(edge.label.length * 6.5 + 20);
+			g.setEdge(edge.source, edge.target, { label: edge.label, width: labelW, height: 22 });
+		} else {
+			g.setEdge(edge.source, edge.target);
+		}
 	}
 
 	dagre.layout(g);

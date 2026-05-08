@@ -1,4 +1,6 @@
-**/*
-!dist/extension.js
-!dist/webview/**
-!package.json
+node_modules
+src
+tsconfig.json
+esbuild.mjs
+build.mjs
+*.vsix

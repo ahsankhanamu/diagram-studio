@@ -14,6 +14,15 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "diagramStudio",
+          "title": "Diagram Studio",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "diagramStudio.diagramEditor",
@@ -25,7 +34,87 @@
         ],
         "priority": "option"
       }
-    ]
+    ],
+    "views": {
+      "diagramStudio": [
+        {
+          "id": "diagramStudio.explorer",
+          "name": "Diagram Studio",
+          "icon": "media/icon.svg"
+        }
+      ],
+      "explorer": [
+        {
+          "id": "diagramStudio.explorerPanel",
+          "name": "Diagram Studio",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "diagramStudio.refreshExplorer",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Diagram Studio"
+      },
+      {
+        "command": "diagramStudio.newDiagram",
+        "title": "New Diagram",
+        "icon": "$(add)",
+        "category": "Diagram Studio"
+      },
+      {
+        "command": "diagramStudio.exportAllAsHtml",
+        "title": "Export Diagrams as HTML…",
+        "icon": "$(export)",
+        "category": "Diagram Studio"
+      },
+      {
+        "command": "diagramStudio.exportSelectedAsHtml",
+        "title": "Export Selected as HTML",
+        "icon": "$(export)",
+        "category": "Diagram Studio"
+      },
+      {
+        "command": "diagramStudio.reformatAllDiagrams",
+        "title": "Reformat Diagrams (Auto-layout)",
+        "icon": "$(symbol-misc)",
+        "category": "Diagram Studio"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "diagramStudio.newDiagram",
+          "when": "view == diagramStudio.explorer || view == diagramStudio.explorerPanel",
+          "group": "navigation@1"
+        },
+        {
+          "command": "diagramStudio.exportAllAsHtml",
+          "when": "view == diagramStudio.explorer || view == diagramStudio.explorerPanel",
+          "group": "navigation@2"
+        },
+        {
+          "command": "diagramStudio.refreshExplorer",
+          "when": "view == diagramStudio.explorer || view == diagramStudio.explorerPanel",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "diagramStudio.exportSelectedAsHtml",
+          "when": "(view == diagramStudio.explorer || view == diagramStudio.explorerPanel) && viewItem == diagramFile",
+          "group": "export@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "diagramStudio.reformatAllDiagrams",
+          "when": "workspaceFolderCount > 0"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "node build.mjs",
@@ -35,5 +124,8 @@
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.25.0"
+  },
+  "dependencies": {
+    "@dagrejs/dagre": "^2.0.4"
   }
 }

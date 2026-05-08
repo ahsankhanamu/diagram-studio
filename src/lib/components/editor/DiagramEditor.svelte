@@ -517,7 +517,8 @@
 			onpanecontextmenu={handlePaneContextMenu}
 			selectionOnDrag
 			panOnScroll
-			panOnDrag={false}
+			panOnDrag={[1, 2]}
+			panActivationKeyCode="Space"
 			snapToGrid={false}
 			edgesFocusable
 			edgesReconnectable
