@@ -786,37 +786,6 @@
 
 {#if loading}
 	<!-- Loading -->
-{:else if !vscodeMode && !$workspaceReady}
-	<!-- Workspace picker -->
-	<div class="flex h-screen items-center justify-center" style="background: var(--color-bg-primary);">
-		<div class="max-w-md text-center">
-			<div
-				class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
-				style="background: var(--color-accent-light); color: var(--color-accent);"
-			>
-				<HardDrive size={32} />
-			</div>
-			<h1 class="mb-2 text-2xl font-bold" style="color: var(--color-text-primary);">
-				Diagram Studio
-			</h1>
-			<p class="mb-8 text-sm" style="color: var(--color-text-tertiary);">
-				Choose a folder to store your diagrams. The app reads and writes JSON files directly — AI tools can edit the same files and changes sync automatically.
-			</p>
-			<button
-				onclick={handleOpenWorkspace}
-				class="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors"
-				style="background: var(--color-accent);"
-			>
-				<FolderOpen size={18} />
-				Open Folder
-			</button>
-			{#if !isFileSystemAccessSupported()}
-				<p class="mt-4 text-xs" style="color: var(--color-error-text);">
-					Your browser doesn't support the File System Access API. Use Chrome, Edge, or Opera.
-				</p>
-			{/if}
-		</div>
-	</div>
 {:else}
 	<!-- Editor -->
 
@@ -947,5 +916,44 @@
 			onExport={handleDialogExport}
 			onClose={() => { showExportDialog = false; }}
 		/>
+	{/if}
+
+	<!-- Workspace picker modal — shown when no folder is open, overlays the app -->
+	{#if !vscodeMode && !$workspaceReady}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center"
+			style="background: rgba(0,0,0,0.25); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);"
+		>
+			<div
+				class="w-full max-w-lg rounded-2xl p-10 text-center shadow-2xl"
+				style="background: var(--color-bg-surface); border: 1px solid var(--color-border-subtle);"
+			>
+				<div
+					class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl"
+					style="background: var(--color-accent-light); color: var(--color-accent);"
+				>
+					<HardDrive size={32} />
+				</div>
+				<h1 class="mb-2 text-2xl font-bold" style="color: var(--color-text-primary);">
+					Diagram Studio
+				</h1>
+				<p class="mb-8 text-sm leading-relaxed" style="color: var(--color-text-tertiary);">
+					Choose a folder to store your diagrams. The app reads and writes JSON files directly — AI tools can edit the same files and changes sync automatically.
+				</p>
+				<button
+					onclick={handleOpenWorkspace}
+					class="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors"
+					style="background: var(--color-accent);"
+				>
+					<FolderOpen size={18} />
+					Open Folder
+				</button>
+				{#if !isFileSystemAccessSupported()}
+					<p class="mt-4 text-xs" style="color: var(--color-error-text);">
+						Your browser doesn't support the File System Access API. Use Chrome, Edge, or Opera.
+					</p>
+				{/if}
+			</div>
+		</div>
 	{/if}
 {/if}
