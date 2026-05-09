@@ -64,7 +64,8 @@
 	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
 	import { startLinter } from '$lib/stores/linterStore';
 	import { isVSCodeWebview, postToExtension, onExtensionMessage } from '$lib/engine/vscode-bridge';
-	import { saveImport, loadImport, removeImport } from '$lib/engine/import-cache';
+	import { saveImport, loadImport, removeImport, listImports } from '$lib/engine/import-cache';
+	import ImportExplorer from '$lib/components/editor/ImportExplorer.svelte';
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
 	import LintPanel from '$lib/components/editor/LintPanel.svelte';
@@ -91,6 +92,7 @@
 	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
 	let importMode = $state(false);
 	let importModeId = $state('');
+	let importExplorerRef: ImportExplorer | undefined = $state();
 
 	// ── Autosave: direct callback from mutations ──────────────────────
 	// No $effect, no subscriptions, no reactivity.
@@ -368,6 +370,37 @@
 		diagramMeta.set(null);
 	}
 
+	function handleImportSwitch(diagram: DiagramFile) {
+		importModeId = diagram.id;
+		sessionStorage.setItem('ds-import-id', diagram.id);
+		loadDiagramFlat(diagram);
+		clearHistory();
+		requestAnimationFrame(() => editorRef?.fitView());
+	}
+
+	async function handleImportDelete(id: string) {
+		await removeImport(id);
+		const isActive = id === importModeId;
+		if (isActive) {
+			const remaining = (await listImports()).sort(
+				(a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? '')
+			);
+			if (remaining.length > 0) {
+				handleImportSwitch(remaining[0]);
+			} else {
+				sessionStorage.removeItem('ds-import-id');
+				importMode = false;
+				importModeId = '';
+				nodes.set(new Map());
+				edges.set(new Map());
+				diagramMeta.set(null);
+				await restoreWorkspace(false);
+				return;
+			}
+		}
+		importExplorerRef?.refresh();
+	}
+
 	// ── Save pipeline ──────────────────────────────────────────────────
 
 	function buildDiagramFile(): DiagramFile | null {
@@ -407,6 +440,7 @@
 			diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
 			try {
 				await saveImport({ ...diagram, id: importModeId });
+				importExplorerRef?.refresh();
 			} catch { /* non-fatal */ }
 			lastWrittenSnapshot = currentSnapshot;
 			isDirty.set(false);
@@ -912,13 +946,31 @@
 
 					<!-- Tab content -->
 					{#if $activeTab === 'files'}
-						<FileExplorer
-							bind:this={fileExplorerRef}
-							{activeFile}
-							onFileSelect={handleFileSelect}
-							onFileCreated={handleFileCreated}
-							onFileDeleted={handleFileDeleted}
-						/>
+						{#if importMode}
+							<ImportExplorer
+								bind:this={importExplorerRef}
+								activeImportId={importModeId}
+								onSwitch={handleImportSwitch}
+								onDelete={handleImportDelete}
+								onOpenFolder={async () => {
+									const ok = await openWorkspace();
+									if (ok) {
+										sessionStorage.removeItem('ds-import-id');
+										importMode = false;
+										importModeId = '';
+										handleWorkspaceChanged();
+									}
+								}}
+							/>
+						{:else}
+							<FileExplorer
+								bind:this={fileExplorerRef}
+								{activeFile}
+								onFileSelect={handleFileSelect}
+								onFileCreated={handleFileCreated}
+								onFileDeleted={handleFileDeleted}
+							/>
+						{/if}
 					{:else if $activeTab === 'nodes'}
 						<NodePalette />
 					{:else}
@@ -973,56 +1025,14 @@
 		/>
 	{/if}
 
-	<!-- Import mode banner — shown when diagram was opened from exported HTML -->
+	<!-- Import mode indicator pill -->
 	{#if importMode}
 		<div
-			class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 text-sm shadow-lg"
-			style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-secondary);"
+			class="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-md pointer-events-none"
+			style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-muted);"
 		>
-			<span>Imported diagram · edits auto-saved to browser</span>
-			<button
-				onclick={async () => {
-					const ok = await openWorkspace();
-					if (ok) {
-						if (importModeId) {
-							await removeImport(importModeId);
-							sessionStorage.removeItem('ds-import-id');
-						}
-						importMode = false;
-						importModeId = '';
-						handleWorkspaceChanged();
-					}
-				}}
-				class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
-				style="background: var(--color-accent); color: #fff;"
-			>
-				Open folder to save
-			</button>
-			<button
-				onclick={async () => {
-					if (importModeId) {
-						await removeImport(importModeId);
-						sessionStorage.removeItem('ds-import-id');
-					}
-					importMode = false;
-					importModeId = '';
-					nodes.set(new Map());
-					edges.set(new Map());
-					diagramMeta.set(null);
-					await restoreWorkspace(false);
-				}}
-				class="rounded-md px-2 py-1 text-xs transition-colors hover:opacity-70"
-				style="color: #ef4444;"
-			>
-				Delete
-			</button>
-			<button
-				onclick={() => { importMode = false; }}
-				class="rounded-md px-2 py-1 text-xs transition-colors hover:opacity-70"
-				style="color: var(--color-text-muted);"
-			>
-				Dismiss
-			</button>
+			<div class="h-1.5 w-1.5 flex-shrink-0 rounded-full" style="background: var(--color-accent);"></div>
+			Browser import · edits auto-saved
 		</div>
 	{/if}
 

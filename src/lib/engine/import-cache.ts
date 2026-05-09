@@ -39,6 +39,20 @@ export async function loadImport(id: string): Promise<DiagramFile | null> {
 	}
 }
 
+export async function listImports(): Promise<DiagramFile[]> {
+	try {
+		const db = await openImportDB();
+		return new Promise((resolve) => {
+			const tx = db.transaction(STORE, 'readonly');
+			const req = tx.objectStore(STORE).getAll();
+			req.onsuccess = () => resolve(req.result ?? []);
+			req.onerror = () => resolve([]);
+		});
+	} catch {
+		return [];
+	}
+}
+
 export async function removeImport(id: string): Promise<void> {
 	try {
 		const db = await openImportDB();
