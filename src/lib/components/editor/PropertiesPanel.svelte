@@ -6,6 +6,7 @@
 	import { nodeRegistry } from '$lib/components/nodes';
 	import { pushHistory } from '$lib/stores/historyStore';
 	import type { MarkerType, StrokeStyle, HandleDistributionMode, ErdField } from '$lib/types/diagram';
+	import { theme } from '$lib/stores/themeStore';
 
 	let selectedNode = $derived.by(() => {
 		const ids = $selectedNodeIds;
@@ -66,6 +67,53 @@
 		if (!value) delete style[key];
 		updateNode(selectedNode.id, { style });
 	}
+
+	function docCssVar(name: string): string {
+		if (typeof document === 'undefined') return '';
+		return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+	}
+
+	function parseCssColor(c: string): [number, number, number] | null {
+		const hex = /^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(c.trim());
+		if (hex) return [parseInt(hex[1], 16), parseInt(hex[2], 16), parseInt(hex[3], 16)];
+		const rgb = c.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+		if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
+		return null;
+	}
+
+	function mixToHex(accent: string, pct: number, base: string): string {
+		const c1 = parseCssColor(accent);
+		const c2 = parseCssColor(base);
+		if (!c1 || !c2) return base;
+		const t = pct / 100;
+		return '#' + [0, 1, 2].map(i => Math.round(c1[i] * t + c2[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
+	}
+
+	// Reactive to both selectedNode and theme changes so colors update when theme switches.
+	const effectiveBackground = $derived.by(() => {
+		void $theme; // track theme changes
+		if (!selectedNode) return '#ffffff';
+		if (selectedNode.style?.backgroundColor) return selectedNode.style.backgroundColor;
+		const def = nodeRegistry[selectedNode.type];
+		const bgSurface = docCssVar('--color-bg-surface') || '#ffffff';
+		if (def?.backgroundTint && def.color) {
+			const accent = docCssVar(def.color);
+			if (accent) return mixToHex(accent, def.backgroundTint, bgSurface);
+		}
+		return bgSurface;
+	});
+
+	const effectiveBorderColor = $derived.by(() => {
+		void $theme; // track theme changes
+		if (!selectedNode) return '#e5e7eb';
+		if (selectedNode.style?.borderColor) return selectedNode.style.borderColor;
+		const def = nodeRegistry[selectedNode.type];
+		if (def?.color) {
+			const accent = docCssVar(def.color);
+			if (accent) return accent;
+		}
+		return docCssVar('--color-border-primary') || '#e5e7eb';
+	});
 
 	// ── ERD field editor ──────────────────────────────────────────────
 	const ERD_HEADER_H = 28;
@@ -326,7 +374,7 @@
 						<div class="flex items-center gap-1.5">
 							<input
 								type="color"
-								value={selectedNode.style?.backgroundColor || '#ffffff'}
+								value={effectiveBackground}
 								oninput={(e) => updateNodeStyle('backgroundColor', (e.target as HTMLInputElement).value)}
 								class="h-6 w-6 cursor-pointer rounded border"
 								style="border-color: var(--color-border-primary);"
@@ -345,7 +393,7 @@
 						<div class="flex items-center gap-1.5">
 							<input
 								type="color"
-								value={selectedNode.style?.borderColor || '#e5e7eb'}
+								value={effectiveBorderColor}
 								oninput={(e) => updateNodeStyle('borderColor', (e.target as HTMLInputElement).value)}
 								class="h-6 w-6 cursor-pointer rounded border"
 								style="border-color: var(--color-border-primary);"
