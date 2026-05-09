@@ -166,9 +166,9 @@
 				importModeId = diagram.id;
 				hasImports = true;
 				history.replaceState(null, '', location.pathname);
-			} catch {
-				await restoreWorkspace(false);
-			}
+			} catch { /* malformed hash */ }
+			// Always restore any previously-opened folders alongside the import
+			restoreWorkspace(false);
 			loading = false;
 		} else {
 			// Check imports in IDB first (lazy — metadata only)
