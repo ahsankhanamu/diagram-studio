@@ -90,6 +90,6 @@
 	{:else}
 		<div class="px-2.5 py-1.5 text-xs" style="color: var(--color-text-muted);">No fields</div>
 	{/if}
-
-	<NodeHandles {ports} {color} nodeId={id} />
 </div>
+
+<NodeHandles {ports} {color} nodeId={id} />

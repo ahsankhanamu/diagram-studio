@@ -49,9 +49,9 @@
 />
 
 <div
-	class="relative rounded-lg border"
+	class="rounded-lg border"
 	style="
-		background: color-mix(in srgb, ${effectiveColor} 8%, var(--color-bg-surface));
+		background: {customStyle?.backgroundColor || `color-mix(in srgb, ${effectiveColor} 8%, var(--color-bg-surface))`};
 		border-color: {borderStyle === 'none' ? 'transparent' : (selected ? effectiveColor : `color-mix(in srgb, ${effectiveColor} 40%, var(--color-border-primary))`)};
 		border-style: {borderStyle === 'none' ? 'solid' : borderDash};
 		box-shadow: {selected ? `0 0 0 2px color-mix(in srgb, ${effectiveColor} 30%, transparent), 0 4px 16px rgba(0,0,0,0.1)` : '0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.06)'};
