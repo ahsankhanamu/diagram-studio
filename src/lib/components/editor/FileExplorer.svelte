@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		File,
+		Globe,
 		Folder,
 		FolderPlus,
 		FilePlus,
@@ -256,7 +257,8 @@
 			renamingEntry = null;
 			return;
 		}
-		const newFileName = isFile ? `${renameValue.trim()}.json` : renameValue.trim();
+		const ext = isFile ? (oldName.endsWith('.html') ? '.html' : '.json') : '';
+		const newFileName = isFile ? `${renameValue.trim()}${ext}` : renameValue.trim();
 		if (newFileName !== oldName) {
 			try {
 				if (isFile) {
@@ -451,7 +453,11 @@
 						role="treeitem"
 						tabindex="0"
 					>
-						<File size={13} style="color: {activeFile === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};" />
+						{#if entry.name.endsWith('.html')}
+							<Globe size={13} style="color: {activeFile === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};" />
+						{:else}
+							<File size={13} style="color: {activeFile === entry.name ? 'var(--color-accent)' : 'var(--color-text-muted)'};" />
+						{/if}
 						<span class="min-w-0 flex-1 truncate text-xs">{entry.baseName}</span>
 						<button
 							onclick={(e) => handleKebabClick(entry, e)}

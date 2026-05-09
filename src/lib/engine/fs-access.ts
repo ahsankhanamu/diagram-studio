@@ -16,6 +16,7 @@
 import type { DiagramFile } from '$lib/types/diagram';
 import { generateId } from '$lib/utils';
 import { openDB } from './idb-cache';
+import { extractDiagramFromHtml, updateDiagramInHtml } from './html-diagram';
 
 // ── Feature detection ──────────────────────────────────────────────
 
@@ -123,7 +124,9 @@ export async function listEntries(
 		if (entry.kind === 'directory') {
 			entries.push({ name, kind: 'directory', baseName: name });
 		} else if (entry.kind === 'file' && name.endsWith('.json')) {
-			entries.push({ name, kind: 'file', baseName: name.replace('.json', '') });
+			entries.push({ name, kind: 'file', baseName: name.slice(0, -5) });
+		} else if (entry.kind === 'file' && name.endsWith('.html')) {
+			entries.push({ name, kind: 'file', baseName: name.slice(0, -5) });
 		}
 	}
 	return entries.sort((a, b) => {
@@ -137,6 +140,11 @@ export async function readDiagramFile(
 	fileName: string
 ): Promise<DiagramFile | null> {
 	try {
+		if (fileName.endsWith('.html')) {
+			const fileHandle = await dirHandle.getFileHandle(fileName);
+			const file = await fileHandle.getFile();
+			return extractDiagramFromHtml(await file.text());
+		}
 		return await readJsonFile<DiagramFile>(dirHandle, fileName);
 	} catch {
 		return null;
@@ -148,6 +156,15 @@ export async function writeDiagramFile(
 	fileName: string,
 	diagram: DiagramFile
 ): Promise<void> {
+	if (fileName.endsWith('.html')) {
+		const fileHandle = await dirHandle.getFileHandle(fileName);
+		const file = await fileHandle.getFile();
+		const updated = updateDiagramInHtml(await file.text(), diagram);
+		const writable = await fileHandle.createWritable({ keepExistingData: false });
+		await writable.write(updated);
+		await writable.close();
+		return;
+	}
 	await writeJsonFile(dirHandle, fileName, diagram);
 }
 

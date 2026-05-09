@@ -64,6 +64,7 @@
 	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
 	import { startLinter } from '$lib/stores/linterStore';
 	import { isVSCodeWebview, postToExtension, onExtensionMessage } from '$lib/engine/vscode-bridge';
+	import { saveImport, loadImport, removeImport } from '$lib/engine/import-cache';
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
 	import LintPanel from '$lib/components/editor/LintPanel.svelte';
@@ -89,6 +90,7 @@
 	let showExportDialog = $state(false);
 	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
 	let importMode = $state(false);
+	let importModeId = $state('');
 
 	// ── Autosave: direct callback from mutations ──────────────────────
 	// No $effect, no subscriptions, no reactivity.
@@ -98,7 +100,7 @@
 	const SAVE_DEBOUNCE = 800;
 
 	function scheduleSave() {
-		if (!activeFile) return;
+		if (!activeFile && !importMode) return;
 		savePending = true;
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(performSave, SAVE_DEBOUNCE);
@@ -151,8 +153,11 @@
 				const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
 				const json = new TextDecoder().decode(bytes);
 				const diagram = JSON.parse(json) as DiagramFile;
+				await saveImport(diagram);
+				sessionStorage.setItem('ds-import-id', diagram.id);
 				loadDiagramFlat(diagram);
 				importMode = true;
+				importModeId = diagram.id;
 				history.replaceState(null, '', location.pathname);
 			} catch {
 				// malformed hash — fall through to normal workspace flow
@@ -160,6 +165,20 @@
 			}
 			loading = false;
 		} else {
+			// Check if a previous tab session had an imported diagram
+			const savedImportId = sessionStorage.getItem('ds-import-id');
+			if (savedImportId) {
+				const diagram = await loadImport(savedImportId);
+				if (diagram) {
+					loadDiagramFlat(diagram);
+					importMode = true;
+					importModeId = savedImportId;
+					loading = false;
+					return;
+				} else {
+					sessionStorage.removeItem('ds-import-id');
+				}
+			}
 			await restoreWorkspace(false);
 			loading = false;
 		}
@@ -376,6 +395,26 @@
 	}
 
 	async function performSave() {
+		// Import mode: persist edits to IDB only (no filesystem)
+		if (importMode && importModeId) {
+			const currentSnapshot = buildCanonicalSnapshot(get(nodes), get(edges));
+			if (currentSnapshot === lastWrittenSnapshot) {
+				savePending = false;
+				return;
+			}
+			const diagram = buildDiagramFile();
+			if (!diagram) { savePending = false; return; }
+			diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
+			try {
+				await saveImport({ ...diagram, id: importModeId });
+			} catch { /* non-fatal */ }
+			lastWrittenSnapshot = currentSnapshot;
+			isDirty.set(false);
+			saveStatus.set('saved');
+			savePending = false;
+			return;
+		}
+
 		// VS Code mode: send diagram to extension host
 		if (vscodeMode) {
 			const currentSnapshot = buildCanonicalSnapshot(get(nodes), get(edges));
@@ -940,13 +979,42 @@
 			class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 text-sm shadow-lg"
 			style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-secondary);"
 		>
-			<span>Viewing imported diagram · changes won't be saved</span>
+			<span>Imported diagram · edits auto-saved to browser</span>
 			<button
-				onclick={async () => { const ok = await openWorkspace(); if (ok) { importMode = false; handleWorkspaceChanged(); } }}
+				onclick={async () => {
+					const ok = await openWorkspace();
+					if (ok) {
+						if (importModeId) {
+							await removeImport(importModeId);
+							sessionStorage.removeItem('ds-import-id');
+						}
+						importMode = false;
+						importModeId = '';
+						handleWorkspaceChanged();
+					}
+				}}
 				class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
 				style="background: var(--color-accent); color: #fff;"
 			>
 				Open folder to save
+			</button>
+			<button
+				onclick={async () => {
+					if (importModeId) {
+						await removeImport(importModeId);
+						sessionStorage.removeItem('ds-import-id');
+					}
+					importMode = false;
+					importModeId = '';
+					nodes.set(new Map());
+					edges.set(new Map());
+					diagramMeta.set(null);
+					await restoreWorkspace(false);
+				}}
+				class="rounded-md px-2 py-1 text-xs transition-colors hover:opacity-70"
+				style="color: #ef4444;"
+			>
+				Delete
 			</button>
 			<button
 				onclick={() => { importMode = false; }}
