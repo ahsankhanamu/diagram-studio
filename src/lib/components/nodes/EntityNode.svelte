@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { NodeResizer } from '@xyflow/svelte';
 	import NodeHandles from './NodeHandles.svelte';
-
 	import { updateNode } from '$lib/stores/diagramStore';
+	import type { ErdField } from '$lib/types/diagram';
 
 	interface Props {
 		id: string;
@@ -13,7 +13,7 @@
 	const { id, data, selected = false }: Props = $props();
 
 	const label = $derived((data.label as string) || '');
-	const fields = $derived((data.fields as Array<{ name: string; type: string }>) || []);
+	const fields = $derived((data.fields as ErdField[]) || []);
 	const color = 'var(--color-node-erd)';
 	const ports = $derived(
 		(data.ports as { top: boolean; bottom: boolean; left: boolean; right: boolean }) || {
@@ -21,13 +21,19 @@
 		}
 	);
 
+	const KEY_STYLE: Record<string, { bg: string; text: string }> = {
+		pk: { bg: 'rgba(245,158,11,0.18)', text: '#b45309' },
+		fk: { bg: 'rgba(59,130,246,0.18)',  text: '#1d4ed8' },
+		uk: { bg: 'rgba(139,92,246,0.18)',   text: '#6d28d9' },
+	};
+
 	function handleResizeEnd(_event: unknown, params: { width: number; height: number }) {
 		updateNode(id, { size: { width: Math.round(params.width), height: Math.round(params.height) } });
 	}
 </script>
 
 <NodeResizer
-	minWidth={100}
+	minWidth={140}
 	minHeight={50}
 	isVisible={selected}
 	onResizeEnd={handleResizeEnd}
@@ -44,16 +50,40 @@
 		width: 100%; height: 100%;
 	"
 >
-	<div class="border-b px-2.5 py-1.5" style="background: linear-gradient(135deg, color-mix(in srgb, {color} 10%, transparent), color-mix(in srgb, {color} 4%, transparent)); border-color: var(--color-border-subtle);">
+	<!-- Header -->
+	<div
+		class="flex items-center gap-1.5 border-b px-2.5 py-1.5"
+		style="background: linear-gradient(135deg, color-mix(in srgb, {color} 10%, transparent), color-mix(in srgb, {color} 4%, transparent)); border-color: var(--color-border-subtle);"
+	>
+		<svg width="11" height="11" viewBox="0 0 12 12" fill="none" style="color: {color}; flex-shrink: 0;">
+			<rect x="0.5" y="0.5" width="11" height="11" rx="1.5" stroke="currentColor" stroke-width="1.2"/>
+			<line x1="0.5" y1="4" x2="11.5" y2="4" stroke="currentColor" stroke-width="1.2"/>
+			<line x1="4.5" y1="4" x2="4.5" y2="11.5" stroke="currentColor" stroke-width="1.2"/>
+		</svg>
 		<span class="text-sm font-semibold" style="color: {color};">{label}</span>
 	</div>
 
+	<!-- Fields table -->
 	{#if fields.length > 0}
-		<div class="px-2.5 py-1">
-			{#each fields as field}
-				<div class="flex justify-between py-0.5 text-xs">
-					<span style="color: var(--color-text-primary);">{field.name}</span>
-					<span style="color: var(--color-text-muted);">{field.type}</span>
+		<div>
+			{#each fields as field, i}
+				<div
+					class="flex items-center gap-1 px-2"
+					style="min-height: 22px; border-top: {i > 0 ? '1px solid var(--color-border-subtle)' : 'none'};"
+				>
+					<!-- Key badge (fixed 26px column) -->
+					<div class="shrink-0" style="width: 26px;">
+						{#if field.key && KEY_STYLE[field.key]}
+							<span
+								class="inline-block rounded px-1 text-[9px] font-bold uppercase leading-4"
+								style="background: {KEY_STYLE[field.key].bg}; color: {KEY_STYLE[field.key].text};"
+							>{field.key}</span>
+						{/if}
+					</div>
+					<!-- Field name -->
+					<span class="min-w-0 flex-1 truncate text-xs" style="color: var(--color-text-primary);">{field.name}</span>
+					<!-- Field type -->
+					<span class="shrink-0 text-[10px] font-mono" style="color: var(--color-text-muted); max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{field.type}</span>
 				</div>
 			{/each}
 		</div>

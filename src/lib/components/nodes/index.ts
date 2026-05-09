@@ -184,7 +184,7 @@ export const nodeRegistry: Record<string, NodeTypeDefinition> = {
 		icon: 'Table',
 		color: '--color-node-erd',
 		description: 'Database entity with fields',
-		defaultSize: { width: 160, height: 80 },
+		defaultSize: { width: 200, height: 58 },
 		defaultPorts: { top: true, bottom: true, left: true, right: true },
 		defaultData: { fields: [] }
 	},

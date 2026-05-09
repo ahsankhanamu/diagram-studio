@@ -186,8 +186,40 @@ function drawArrowhead(x: number, y: number, angle: number, type: string, color:
 		const [x2, y2] = rot(0, 0);
 		const [x3, y3] = rot(-size, size * 0.5);
 		return `<polyline points="${x1},${y1} ${x2},${y2} ${x3},${y3}" fill="none" stroke="${esc(color)}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+	} else if (type.startsWith('crow-')) {
+		return drawCrowFoot(x, y, angle, type, color);
 	}
 	return '';
+}
+
+function drawCrowFoot(x: number, y: number, angle: number, type: string, color: string): string {
+	// Direction pointing backward along the path (away from target, toward source)
+	const dx = -Math.cos(angle), dy = -Math.sin(angle);
+	const px = -dy, py = dx; // perpendicular
+	const sw = `fill="none" stroke="${esc(color)}" stroke-width="1.5" stroke-linecap="round"`;
+	const BH = 7;
+
+	const bar = (d: number) => {
+		const bx = x + d * dx, by = y + d * dy;
+		return `<line x1="${bx + BH*px}" y1="${by + BH*py}" x2="${bx - BH*px}" y2="${by - BH*py}" ${sw}/>`;
+	};
+	const fork = (dBase: number, dTip: number) => {
+		const bx = x + dBase*dx, by = y + dBase*dy;
+		const tx = x + dTip*dx, ty = y + dTip*dy;
+		return `<line x1="${bx}" y1="${by}" x2="${tx}" y2="${ty}" ${sw}/>`
+			+ `<line x1="${bx}" y1="${by}" x2="${tx+BH*px}" y2="${ty+BH*py}" ${sw}/>`
+			+ `<line x1="${bx}" y1="${by}" x2="${tx-BH*px}" y2="${ty-BH*py}" ${sw}/>`;
+	};
+	const circ = (d: number, r: number) =>
+		`<circle cx="${x+d*dx}" cy="${y+d*dy}" r="${r}" ${sw}/>`;
+
+	switch (type) {
+		case 'crow-one':          return bar(5) + bar(11);
+		case 'crow-many':         return bar(5) + fork(5, 12);
+		case 'crow-zero-or-one':  return circ(9, 4) + bar(15);
+		case 'crow-zero-or-many': return circ(9, 4) + fork(14, 20);
+		default: return '';
+	}
 }
 
 // ── Edge end-angle estimation ──────────────────────────────────────
@@ -438,23 +470,38 @@ function svgDatabaseNode(node: DiagramNode, pos: { x: number; y: number }): stri
 </g>`;
 }
 
+const ERD_KEY_BG:   Record<string, string> = { pk: '#fef3c7', fk: '#dbeafe', uk: '#ede9fe' };
+const ERD_KEY_TEXT: Record<string, string> = { pk: '#b45309', fk: '#1d4ed8', uk: '#6d28d9' };
+
 function svgEntityNode(node: DiagramNode, pos: { x: number; y: number }): string {
 	const { x, y } = pos;
 	const { width: w, height: h } = node.size;
 	const color = nodeColor(node);
 	const headerH = 26;
-	const fields = (node.data?.fields as Array<{ name: string; type: string }>) || [];
+	const rowH = 22;
+	const fields = (node.data?.fields as Array<{ name: string; type: string; key?: string | null }>) || [];
 	const clipId = `eclip-${node.id.replace(/[^a-z0-9]/gi, '')}`;
 	const headerFill = colorMix(color, T.bgSurface, 10);
-	const maxFields = Math.floor((h - headerH - 4) / 18);
+	const maxFields = Math.floor((h - headerH - 6) / rowH);
+
 	const fieldRows = fields.slice(0, maxFields).map((f, i) => {
-		const fy = headerH + 4 + i * 18 + 9;
-		return `<text x="10" y="${fy}" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" fill="${T.textPrimary}">${esc(f.name || '')}</text>
-  <text x="${w - 10}" y="${fy}" text-anchor="end" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" fill="${T.textMuted}">${esc(f.type || '')}</text>`;
-	}).join('\n  ');
+		const fy = headerH + i * rowH;
+		const rowMidY = fy + rowH / 2;
+		const sep = i > 0 ? `<line x1="0" y1="${fy}" x2="${w}" y2="${fy}" stroke="${T.borderSubtle}" stroke-width="0.5"/>` : '';
+		const keyBadge = f.key && ERD_KEY_BG[f.key]
+			? `<rect x="6" y="${rowMidY - 7}" width="22" height="14" rx="2" fill="${ERD_KEY_BG[f.key]}"/>
+  <text x="17" y="${rowMidY}" text-anchor="middle" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="8" font-weight="700" fill="${ERD_KEY_TEXT[f.key]}">${esc(f.key.toUpperCase())}</text>`
+			: '';
+		const nameX = 34;
+		const nameEl = `<text x="${nameX}" y="${rowMidY}" dominant-baseline="middle" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" fill="${T.textPrimary}" clip-path="url(#${clipId})">${esc(f.name || '')}</text>`;
+		const typeEl = `<text x="${w - 8}" y="${rowMidY}" text-anchor="end" dominant-baseline="middle" font-family="'SF Mono','Fira Code',monospace" font-size="10" fill="${T.textMuted}" clip-path="url(#${clipId})">${esc(f.type || '')}</text>`;
+		return `${sep}\n  ${keyBadge}\n  ${nameEl}\n  ${typeEl}`;
+	}).join('\n');
+
 	const emptyRow = fields.length === 0
 		? `<text x="10" y="${headerH + 14}" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="11" fill="${T.textMuted}">No fields</text>`
 		: '';
+
 	return `<g transform="translate(${x},${y})" filter="url(#ds)">
   <defs>
     <clipPath id="${clipId}">

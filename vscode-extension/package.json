@@ -2,7 +2,7 @@
   "name": "diagram-studio-vscode",
   "displayName": "Diagram Studio",
   "description": "Visual editor for Diagram Studio JSON diagram files",
-  "version": "0.2.0",
+  "version": "0.2.6",
   "private": true,
   "publisher": "diagram-studio",
   "engines": {
@@ -119,7 +119,7 @@
   "scripts": {
     "build": "node build.mjs",
     "build:ext": "node esbuild.mjs",
-    "package": "node build.mjs && npx @vscode/vsce package --no-dependencies"
+    "package": "node package.mjs"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",

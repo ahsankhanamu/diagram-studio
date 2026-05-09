@@ -47,6 +47,7 @@ export function toFlowNodes(diagramNodes: DiagramNode[], selectedIds?: Set<strin
 
 function mapMarker(marker: MarkerType | undefined): { type: XYMarkerType; color?: string; width?: number; height?: number } | undefined {
 	if (!marker || marker === 'none') return undefined;
+	if (marker.startsWith('crow-')) return undefined; // crow's foot drawn by SmartEdge
 	const typeMap: Record<string, XYMarkerType> = {
 		arrow: 'arrow' as XYMarkerType,
 		arrowclosed: 'arrowclosed' as XYMarkerType,
@@ -86,7 +87,9 @@ export function toFlowEdges(diagramEdges: DiagramEdge[]): Edge[] {
 				strokeColor: e.strokeColor || '',
 				animated: e.animated,
 				centerX: e.centerX,
-				centerY: e.centerY
+				centerY: e.centerY,
+				markerEnd: e.markerEnd ?? 'arrowclosed',
+				markerStart: e.markerStart ?? 'none',
 			},
 			style
 		};

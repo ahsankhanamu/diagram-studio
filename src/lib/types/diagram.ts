@@ -27,7 +27,15 @@ export interface DiagramNode {
 	extent?: 'parent';
 }
 
-export type MarkerType = 'arrow' | 'arrowclosed' | 'circle' | 'diamond' | 'none';
+export type MarkerType = 'arrow' | 'arrowclosed' | 'circle' | 'diamond' | 'none'
+  | 'crow-one' | 'crow-many' | 'crow-zero-or-one' | 'crow-zero-or-many';
+
+export type ErdFieldKey = 'pk' | 'fk' | 'uk' | null;
+export interface ErdField {
+  name: string;
+  type: string;
+  key?: ErdFieldKey;
+}
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
 
 export interface DiagramEdge {

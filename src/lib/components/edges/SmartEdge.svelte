@@ -6,6 +6,7 @@
 		getBezierPath,
 		getSmoothStepPath,
 		getStraightPath,
+		Position,
 		type EdgeProps
 	} from '@xyflow/svelte';
 	import { updateEdge } from '$lib/stores/diagramStore';
@@ -138,6 +139,49 @@
 		updateEdge(id, { centerX: undefined, centerY: undefined });
 	}
 
+	// ─── Crow's foot markers ──────────────────────────────────────
+	const rawMarkerEnd = $derived((data?.markerEnd as string) || 'arrowclosed');
+	const rawMarkerStart = $derived((data?.markerStart as string) || 'none');
+	const isCrowEnd = $derived(rawMarkerEnd.startsWith('crow-'));
+	const isCrowStart = $derived(rawMarkerStart.startsWith('crow-'));
+
+	function crowDir(pos: Position): { dx: number; dy: number } {
+		switch (pos) {
+			case Position.Top:    return { dx:  0, dy: -1 };
+			case Position.Bottom: return { dx:  0, dy:  1 };
+			case Position.Left:   return { dx: -1, dy:  0 };
+			default:              return { dx:  1, dy:  0 };
+		}
+	}
+
+	function crowFootSvg(x: number, y: number, pos: Position, type: string, color: string): string {
+		const { dx, dy } = crowDir(pos);
+		const px = -dy, py = dx;
+		const sc = color.startsWith('var(') ? '#94a3b8' : color;
+		const sw = `stroke="${sc}" stroke-width="1.5" stroke-linecap="round"`;
+		const BH = 7;
+		const bar = (d: number) => {
+			const bx = x + d * dx, by = y + d * dy;
+			return `<line x1="${bx + BH*px}" y1="${by + BH*py}" x2="${bx - BH*px}" y2="${by - BH*py}" fill="none" ${sw}/>`;
+		};
+		const fork = (dBase: number, dTip: number) => {
+			const bx = x + dBase*dx, by = y + dBase*dy;
+			const tx = x + dTip*dx, ty = y + dTip*dy;
+			return `<line x1="${bx}" y1="${by}" x2="${tx}" y2="${ty}" fill="none" ${sw}/>`
+				+ `<line x1="${bx}" y1="${by}" x2="${tx+BH*px}" y2="${ty+BH*py}" fill="none" ${sw}/>`
+				+ `<line x1="${bx}" y1="${by}" x2="${tx-BH*px}" y2="${ty-BH*py}" fill="none" ${sw}/>`;
+		};
+		const circ = (d: number, r: number) =>
+			`<circle cx="${x+d*dx}" cy="${y+d*dy}" r="${r}" fill="none" ${sw}/>`;
+		switch (type) {
+			case 'crow-one':          return bar(5) + bar(11);
+			case 'crow-many':         return bar(5) + fork(5, 12);
+			case 'crow-zero-or-one':  return circ(9, 4) + bar(15);
+			case 'crow-zero-or-many': return circ(9, 4) + fork(14, 20);
+			default: return '';
+		}
+	}
+
 	// ─── Label editing ──────────────────────────────────────────
 	function startEdit() {
 		editValue = label;
@@ -165,6 +209,14 @@
 	interactionWidth={40}
 	class={isAnimated ? 'edge-flow-animated' : ''}
 />
+
+<!-- Crow's foot markers -->
+{#if isCrowEnd}
+	{@html crowFootSvg(targetX, targetY, targetPosition, rawMarkerEnd, strokeColor || 'var(--color-edge-default)')}
+{/if}
+{#if isCrowStart}
+	{@html crowFootSvg(sourceX, sourceY, sourcePosition, rawMarkerStart, strokeColor || 'var(--color-edge-default)')}
+{/if}
 
 <!-- Draggable hotpoints at source and target for reconnecting -->
 {#if selected}

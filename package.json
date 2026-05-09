@@ -11,7 +11,7 @@
     "dev": "vite dev --port 3001",
     "build": "vite build",
     "build:mcp": "npm run build --workspace=diagram-studio-mcp-server",
-    "build:vscode": "npm run build --workspace=diagram-studio-vscode",
+    "build:vscode": "npm run package --workspace=diagram-studio-vscode",
     "build:all": "npm run build && npm run build:mcp && npm run build:vscode",
     "preview": "vite preview --port 3001",
     "mcp:dev": "npm run dev --workspace=diagram-studio-mcp-server",

@@ -5,7 +5,7 @@
 	import { rightPanelOpen, rightPanelWidth } from '$lib/stores/sidebarStore';
 	import { nodeRegistry } from '$lib/components/nodes';
 	import { pushHistory } from '$lib/stores/historyStore';
-	import type { MarkerType, StrokeStyle, HandleDistributionMode } from '$lib/types/diagram';
+	import type { MarkerType, StrokeStyle, HandleDistributionMode, ErdField } from '$lib/types/diagram';
 
 	let selectedNode = $derived.by(() => {
 		const ids = $selectedNodeIds;
@@ -27,7 +27,11 @@
 	const markerOptions: { value: MarkerType; label: string }[] = [
 		{ value: 'none', label: 'None' },
 		{ value: 'arrow', label: 'Arrow' },
-		{ value: 'arrowclosed', label: 'Arrow (filled)' }
+		{ value: 'arrowclosed', label: 'Arrow (filled)' },
+		{ value: 'crow-one', label: 'ERD: Exactly one (||)' },
+		{ value: 'crow-many', label: 'ERD: One or many (|<)' },
+		{ value: 'crow-zero-or-one', label: 'ERD: Zero or one (O|)' },
+		{ value: 'crow-zero-or-many', label: 'ERD: Zero or many (O<)' },
 	];
 
 	const strokeStyleOptions: { value: StrokeStyle; label: string }[] = [
@@ -61,6 +65,46 @@
 		const style = { ...selectedNode.style, [key]: value };
 		if (!value) delete style[key];
 		updateNode(selectedNode.id, { style });
+	}
+
+	// ── ERD field editor ──────────────────────────────────────────────
+	const ERD_HEADER_H = 28;
+	const ERD_ROW_H = 22;
+	const ERD_PAD = 8;
+
+	const entityFields = $derived.by((): ErdField[] => {
+		if (!selectedNode || selectedNode.type !== 'entity') return [];
+		return (selectedNode.data.fields as ErdField[]) || [];
+	});
+
+	function entityHeight(count: number): number {
+		return ERD_HEADER_H + Math.max(1, count) * ERD_ROW_H + ERD_PAD;
+	}
+
+	function updateField(index: number, patch: Partial<ErdField>) {
+		if (!selectedNode) return;
+		const fields = entityFields.map((f, i) => i === index ? { ...f, ...patch } : f);
+		updateNode(selectedNode.id, { data: { ...selectedNode.data, fields } });
+	}
+
+	function addField() {
+		if (!selectedNode) return;
+		captureHistory();
+		const fields: ErdField[] = [...entityFields, { name: '', type: 'VARCHAR', key: null }];
+		updateNode(selectedNode.id, {
+			data: { ...selectedNode.data, fields },
+			size: { ...selectedNode.size, height: entityHeight(fields.length) }
+		});
+	}
+
+	function removeField(index: number) {
+		if (!selectedNode) return;
+		captureHistory();
+		const fields = entityFields.filter((_, i) => i !== index);
+		updateNode(selectedNode.id, {
+			data: { ...selectedNode.data, fields },
+			size: { ...selectedNode.size, height: entityHeight(fields.length) }
+		});
 	}
 </script>
 
@@ -126,6 +170,84 @@
 					style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
 				></textarea>
 			</div>
+
+			<!-- ERD Fields -->
+			{#if selectedNode.type === 'entity'}
+			<div class="border-t pt-3" style="border-color: var(--color-border-subtle);">
+				<div class="mb-2 flex items-center justify-between">
+					<label class="text-[11px] font-medium" style="color: var(--color-text-tertiary);">Fields</label>
+					<button
+						onclick={addField}
+						class="rounded border px-1.5 py-0.5 text-[10px] transition-colors"
+						style="color: var(--color-accent); border-color: var(--color-border-primary); background: transparent;"
+						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)')}
+						onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
+					>+ Add</button>
+				</div>
+
+				{#each entityFields as field, i}
+					<div class="mb-1 flex items-center gap-1">
+						<select
+							value={field.key || ''}
+							onfocus={captureHistory}
+							onchange={(e) => updateField(i, { key: ((e.target as HTMLSelectElement).value as ErdField['key']) || null })}
+							class="h-6 shrink-0 rounded border px-0.5 text-[9px] font-bold outline-none"
+							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary); width: 38px;"
+							title="Constraint"
+						>
+							<option value="">—</option>
+							<option value="pk">PK</option>
+							<option value="fk">FK</option>
+							<option value="uk">UK</option>
+						</select>
+						<input
+							value={field.name}
+							onfocus={captureHistory}
+							oninput={(e) => updateField(i, { name: (e.target as HTMLInputElement).value })}
+							placeholder="name"
+							class="h-6 min-w-0 flex-1 rounded border px-1.5 text-[11px] outline-none focus:border-[var(--color-accent)]"
+							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary);"
+						/>
+						<input
+							value={field.type}
+							onfocus={captureHistory}
+							oninput={(e) => updateField(i, { type: (e.target as HTMLInputElement).value })}
+							list="erd-sql-types"
+							placeholder="type"
+							class="h-6 shrink-0 rounded border px-1.5 text-[10px] font-mono outline-none focus:border-[var(--color-accent)]"
+							style="background: var(--color-bg-surface-secondary); border-color: var(--color-border-primary); color: var(--color-text-primary); width: 72px;"
+						/>
+						<button
+							onclick={() => removeField(i)}
+							class="flex h-6 w-5 shrink-0 items-center justify-center rounded text-sm leading-none transition-colors"
+							style="color: var(--color-text-muted);"
+							onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--color-error-text)')}
+							onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)')}
+							title="Remove field"
+						>×</button>
+					</div>
+				{:else}
+					<p class="text-[11px]" style="color: var(--color-text-muted);">No fields yet</p>
+				{/each}
+
+				<datalist id="erd-sql-types">
+					<option value="INT"/>
+					<option value="BIGINT"/>
+					<option value="SMALLINT"/>
+					<option value="VARCHAR(255)"/>
+					<option value="TEXT"/>
+					<option value="BOOLEAN"/>
+					<option value="DATE"/>
+					<option value="DATETIME"/>
+					<option value="TIMESTAMP"/>
+					<option value="FLOAT"/>
+					<option value="DECIMAL(10,2)"/>
+					<option value="UUID"/>
+					<option value="JSON"/>
+					<option value="JSONB"/>
+				</datalist>
+			</div>
+			{/if}
 
 			<!-- Position -->
 			<div>

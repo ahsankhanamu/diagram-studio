@@ -1,6 +1,6 @@
 import type { DiagramFile, DiagramNode, DiagramEdge } from '$lib/types/diagram';
-import { renderToSvg } from './svg-renderer';
 import { VIEWER_CSS, VIEWER_SCRIPT, viewerHtml } from './html-viewer';
+import { RENDERER_SCRIPT } from './compact-renderer';
 
 export function hasFileSystemAccess(): boolean {
 	return typeof window !== 'undefined' && 'showSaveFilePicker' in window;
@@ -147,9 +147,13 @@ const MULTI_STYLES = `
   aside .ws-title{font-size:15px;font-weight:700;color:var(--text);margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border);line-height:1.3;word-break:break-word}
   aside h1{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 8px}
   aside ol{list-style:none;padding:0;margin:0}
-  aside li{margin:2px 0}
-  aside a{color:var(--text);text-decoration:none;display:block;padding:6px 8px;border-radius:6px;font-size:13px;line-height:1.4;transition:background .12s,color .12s}
-  aside a:hover,aside a.active{background:#eef2ff;color:var(--accent)}
+  aside li{margin:2px 0;display:flex;align-items:flex-start;border-radius:6px;transition:background .12s}
+  aside li:hover{background:#eef2ff}
+  aside a{flex:1;color:var(--text);text-decoration:none;display:block;padding:6px 8px;font-size:13px;line-height:1.4;transition:color .12s}
+  aside li:hover a,aside a.active{color:var(--accent)}
+  .nav-ext{opacity:0;flex-shrink:0;align-self:center;border:none;background:transparent;color:var(--accent);cursor:pointer;padding:4px 6px;display:flex;align-items:center;transition:opacity .15s;border-radius:4px}
+  aside li:hover .nav-ext{opacity:1}
+  .nav-ext:hover{background:rgba(37,99,235,.1)}
   .aside-footer{flex-shrink:0;padding:12px 20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
   .aside-footer a{color:var(--accent);text-decoration:none}
   .aside-footer a:hover{text-decoration:underline}
@@ -173,8 +177,9 @@ export function generateDiagramHtml(
 	nodes: DiagramNode[],
 	edges: DiagramEdge[]
 ): string {
-	const svgContent = nodes.length > 0 ? renderToSvg(nodes, edges, { padding: 40 }) : null;
 	const now = new Date().toLocaleString();
+	// Embed only the raw diagram JSON — the compact renderer draws it client-side
+	const diagData = JSON.stringify({ ...diagram, nodes, edges });
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -187,8 +192,10 @@ export function generateDiagramHtml(
 <body style="padding:40px 48px 80px;max-width:1100px;margin:0 auto">
   <h1>${escapeHtml(diagram.name)}</h1>
   ${diagram.description ? `<p class="blurb">${escapeHtml(diagram.description)}</p>` : ''}
-  ${viewerHtml('dv0', svgContent)}
+  ${viewerHtml('dv0', null)}
+  <script data-diag="dv0" type="application/json">${diagData}<\/script>
   <p class="meta">Exported from <a href="https://diagram-studio.vercel.app/" target="_blank" rel="noopener">Diagram Studio</a> · ${now}</p>
+${RENDERER_SCRIPT}
 ${VIEWER_SCRIPT}
 </body>
 </html>`;
@@ -212,23 +219,23 @@ export function generateMultiDiagramHtml(
 	items: HtmlExportItem[],
 	title: string = 'Diagrams'
 ): string {
-	const rendered = items.map(({ diagram, nodes, edges }, i) => ({
-		diagram,
-		svgContent: nodes.length > 0 ? renderToSvg(nodes, edges, { padding: 40, idPrefix: `dv${i}` }) : null,
-	}));
-
 	const now = new Date().toLocaleString();
-	const navLinks = rendered
-		.map(({ diagram }, i) => `<li><a href="#d${i}" data-target="d${i}">${escapeHtml(diagram.name)}</a></li>`)
+	const EXT_ICO = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+	const navLinks = items
+		.map(({ diagram }, i) => `<li><a href="#d${i}" data-target="d${i}">${escapeHtml(diagram.name)}</a><button class="nav-ext" onclick="dvOpenInStudio('dv${i}')" title="Open in Diagram Studio">${EXT_ICO}</button></li>`)
 		.join('\n      ');
 
-	const sections = rendered
-		.map(({ diagram, svgContent }, i) => `
+	const sections = items
+		.map(({ diagram, nodes, edges }, i) => {
+			const diagData = JSON.stringify({ ...diagram, nodes, edges });
+			return `
   <section id="d${i}">
     <h2>${escapeHtml(diagram.name)}</h2>
     ${diagram.description ? `<p class="blurb">${escapeHtml(diagram.description)}</p>` : ''}
-    ${viewerHtml(`dv${i}`, svgContent)}
-  </section>`)
+    ${viewerHtml(`dv${i}`, null)}
+    <script data-diag="dv${i}" type="application/json">${diagData}<\/script>
+  </section>`;
+		})
 		.join('\n');
 
 	const navScript = `
@@ -260,7 +267,7 @@ export function generateMultiDiagramHtml(
   <aside>
     <div class="aside-nav">
       <p class="ws-title">${escapeHtml(title)}</p>
-      <h1>Diagrams (${rendered.length})</h1>
+      <h1>Diagrams (${items.length})</h1>
       <ol>
         ${navLinks}
       </ol>
@@ -270,6 +277,7 @@ export function generateMultiDiagramHtml(
   <main>${sections}
   </main>
 </div>
+${RENDERER_SCRIPT}
 ${VIEWER_SCRIPT}
 ${navScript}
 </body>

@@ -12,6 +12,18 @@
 	const { id, data, selected = false }: Props = $props();
 
 	const label = $derived((data.label as string) || 'Group');
+	const customStyle = $derived(data.customStyle as Record<string, string> | undefined);
+
+	// Effective colors: prefer customStyle, fall back to accent/muted defaults
+	const accentColor = $derived(customStyle?.borderColor || 'var(--color-accent)');
+	const borderColor = $derived(selected ? 'var(--color-accent)' : (customStyle?.borderColor || 'var(--color-text-muted)'));
+	const bStyle = $derived(customStyle?.borderStyle || 'dashed');
+	const bodyBg = $derived(
+		customStyle?.backgroundColor ||
+		`color-mix(in srgb, ${accentColor} 5%, transparent)`
+	);
+	const headerBg = $derived(`color-mix(in srgb, ${accentColor} 8%, transparent)`);
+	const headerText = $derived(selected ? 'var(--color-accent)' : (customStyle?.borderColor || 'var(--color-text-secondary)'));
 
 	let editing = $state(false);
 	let editValue = $state('');
@@ -53,15 +65,15 @@
 	class="h-full w-full rounded-lg border-2"
 	style="
 		pointer-events: none;
-		border-style: dashed;
-		border-color: {selected ? 'var(--color-accent)' : 'var(--color-text-muted)'};
-		background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+		border-style: {bStyle !== 'none' ? bStyle : 'solid'};
+		{bStyle === 'none' ? 'border-color: transparent;' : `border-color: ${borderColor};`}
+		background: {bodyBg};
 	"
 >
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
 		class="group-drag-handle flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-xs font-semibold"
-		style="pointer-events: auto; color: {selected ? 'var(--color-accent)' : 'var(--color-text-secondary)'}; background: color-mix(in srgb, var(--color-accent) 8%, transparent);"
+		style="pointer-events: auto; color: {headerText}; background: {headerBg};"
 		class:cursor-text={editing}
 		class:cursor-grab={!editing}
 		ondblclick={startEdit}

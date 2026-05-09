@@ -28,6 +28,7 @@ const ICO_PLUS       = ICO(`<path d="M5 12h14"/><path d="M12 5v14"/>`);
 const ICO_CHEVRON    = ICO(`<path d="m6 9 6 6 6-6"/>`, 10);
 const ICO_MAP        = ICO(`<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>`);
 const ICO_ARROW_LEFT = ICO(`<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>`);
+const ICO_EXT_LINK   = ICO(`<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>`);
 
 // ── CSS — colors from app.css light theme, layout from EditorControls.svelte ──
 export const VIEWER_CSS = `
@@ -504,6 +505,19 @@ const VIEWER_JS = `(function () {
     if (btn) btn.classList.toggle('dv-active', hidden);
   };
 
+  window.dvOpenInStudio = function (id) {
+    var s = document.querySelector('script[data-diag="' + id + '"]');
+    if (!s) return;
+    try {
+      var json = s.textContent || '{}';
+      var bytes = new TextEncoder().encode(json);
+      var binary = '';
+      bytes.forEach(function (b) { binary += String.fromCharCode(b); });
+      var encoded = btoa(binary);
+      window.open('https://diagram-studio.vercel.app/#import=' + encoded, '_blank');
+    } catch (e) {}
+  };
+
   window.dvToggleMax = function (id) {
     var el = document.getElementById(id); if (!el) return;
     var sec = el.closest('section');
@@ -744,7 +758,7 @@ export function viewerHtml(id: string, svgContent: string | null): string {
     </div>
   </div>
   <div class="dv-canvas">
-    <div class="dv-inner">${svgContent ?? '<div class="dv-empty">No content</div>'}</div>
+    <div class="dv-inner" id="di-${id}">${svgContent ?? ''}</div>
 
     <!-- Floating toolbar: centered bottom, pill shape, ghost opacity → 1 on hover -->
     <div class="dv-bar">
@@ -770,6 +784,8 @@ export function viewerHtml(id: string, svgContent: string | null): string {
         <span class="dv-fs-off">${ICO_EXPAND}</span>
         <span class="dv-fs-on">${ICO_CONTRACT}</span>
       </button>
+      <div class="dv-sep"></div>
+      <button class="dv-btn" onclick="dvOpenInStudio('${id}')" title="Open in Diagram Studio">${ICO_EXT_LINK}</button>
     </div>
 
     <!-- Keyboard hints: bottom-left (left-14 = 56px), ghost opacity -->

@@ -88,6 +88,7 @@
 	let showJsonEditor = $state(false);
 	let showExportDialog = $state(false);
 	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
+	let importMode = $state(false);
 
 	// ── Autosave: direct callback from mutations ──────────────────────
 	// No $effect, no subscriptions, no reactivity.
@@ -142,6 +143,21 @@
 			});
 			// Tell the extension we're ready
 			postToExtension('ready');
+			loading = false;
+		} else if (location.hash.startsWith('#import=')) {
+			try {
+				const encoded = location.hash.slice('#import='.length);
+				const binary = atob(encoded);
+				const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+				const json = new TextDecoder().decode(bytes);
+				const diagram = JSON.parse(json) as DiagramFile;
+				loadDiagramFlat(diagram);
+				importMode = true;
+				history.replaceState(null, '', location.pathname);
+			} catch {
+				// malformed hash — fall through to normal workspace flow
+				await restoreWorkspace(false);
+			}
 			loading = false;
 		} else {
 			await restoreWorkspace(false);
@@ -918,8 +934,32 @@
 		/>
 	{/if}
 
+	<!-- Import mode banner — shown when diagram was opened from exported HTML -->
+	{#if importMode}
+		<div
+			class="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 text-sm shadow-lg"
+			style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-secondary);"
+		>
+			<span>Viewing imported diagram · changes won't be saved</span>
+			<button
+				onclick={async () => { const ok = await openWorkspace(); if (ok) { importMode = false; handleWorkspaceChanged(); } }}
+				class="rounded-md px-2.5 py-1 text-xs font-medium transition-colors"
+				style="background: var(--color-accent); color: #fff;"
+			>
+				Open folder to save
+			</button>
+			<button
+				onclick={() => { importMode = false; }}
+				class="rounded-md px-2 py-1 text-xs transition-colors hover:opacity-70"
+				style="color: var(--color-text-muted);"
+			>
+				Dismiss
+			</button>
+		</div>
+	{/if}
+
 	<!-- Workspace picker modal — shown when no folder is open, overlays the app -->
-	{#if !vscodeMode && !$workspaceReady}
+	{#if !vscodeMode && !$workspaceReady && !importMode}
 		<div
 			class="fixed inset-0 z-50 flex items-center justify-center"
 			style="background: rgba(0,0,0,0.25); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);"
