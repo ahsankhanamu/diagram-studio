@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChevronDown, ChevronRight, FolderPlus, Trash2, FilePlus, FolderOpen, ExternalLink } from 'lucide-svelte';
+	import { ChevronDown, ChevronRight, FolderPlus, Trash2, FilePlus, FolderOpen, ExternalLink, Globe } from 'lucide-svelte';
 	import FileExplorer from './FileExplorer.svelte';
 	import ImportExplorer from './ImportExplorer.svelte';
 	import { folderRoots, addFolderRoot, removeFolderRoot, type FolderRoot } from '$lib/stores/workspaceStore';
@@ -11,6 +11,7 @@
 		activeFile: string;
 		activeFolderHandle: FileSystemDirectoryHandle | null;
 		hasImports: boolean;
+		importCount?: number;
 		onOpenImport: (id: string) => void;
 		onDeleteImport: (id: string) => void;
 		onLinkImportToFile: (id: string) => void;
@@ -26,6 +27,7 @@
 		activeFile,
 		activeFolderHandle,
 		hasImports,
+		importCount = 0,
 		onOpenImport,
 		onDeleteImport,
 		onLinkImportToFile,
@@ -117,7 +119,14 @@
 				{:else}
 					<ChevronRight size={10} />
 				{/if}
+				<Globe size={10} class="flex-shrink-0 opacity-70" />
 				<span class="text-[10px] font-medium uppercase tracking-wider">Browser Imports</span>
+				{#if importCount > 0}
+					<span
+						class="ml-1 rounded-full px-1.5 py-px text-[9px] font-semibold leading-none"
+						style="background: var(--color-accent-light); color: var(--color-accent);"
+					>{importCount}</span>
+				{/if}
 			</button>
 
 			{#if importsExpanded}

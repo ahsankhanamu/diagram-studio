@@ -96,6 +96,7 @@
 	let importModeId = $state('');
 	let activeFolderHandle = $state<FileSystemDirectoryHandle | null>(null);
 	let hasImports = $state(false);
+	let importCount = $state(0);
 	let workspacePanelRef: WorkspacePanel | undefined = $state();
 
 	// ── Autosave: direct callback from mutations ──────────────────────
@@ -165,6 +166,7 @@
 				activeSource = 'imports';
 				importModeId = diagram.id;
 				hasImports = true;
+				importCount = (await listImportMeta()).length;
 				history.replaceState(null, '', location.pathname);
 			} catch { /* malformed hash */ }
 			// Always restore any previously-opened folders alongside the import
@@ -174,6 +176,7 @@
 			// Check imports in IDB first (lazy — metadata only)
 			const meta = await listImportMeta();
 			hasImports = meta.length > 0;
+			importCount = meta.length;
 
 			// Restore previously active import for this tab
 			const savedImportId = sessionStorage.getItem('ds-import-id');
@@ -433,6 +436,7 @@
 		await removeImport(id);
 		const meta = await listImportMeta();
 		hasImports = meta.length > 0;
+		importCount = meta.length;
 		const isActive = id === importModeId;
 		if (isActive) {
 			if (meta.length > 0) {
@@ -1049,6 +1053,7 @@
 							{activeFile}
 							{activeFolderHandle}
 							{hasImports}
+							{importCount}
 							onOpenImport={handleOpenImport}
 							onDeleteImport={handleImportDelete}
 							onLinkImportToFile={handleLinkImportToFile}
