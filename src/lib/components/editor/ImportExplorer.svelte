@@ -6,13 +6,14 @@
 
 	interface Props {
 		activeImportId: string;
+		embedded?: boolean;
 		onSwitch: (id: string) => void;
 		onDelete: (id: string) => void;
 		onLinkToFile: (id: string) => void;
 		onOpenFolder: () => void;
 	}
 
-	let { activeImportId, onSwitch, onDelete, onLinkToFile, onOpenFolder }: Props = $props();
+	let { activeImportId, embedded = false, onSwitch, onDelete, onLinkToFile, onOpenFolder }: Props = $props();
 
 	let imports = $state<ImportMeta[]>([]);
 	let linkedNames = $state<Map<string, string>>(new Map());
@@ -45,7 +46,8 @@
 </script>
 
 <div class="flex flex-col overflow-hidden" style="flex: 1;">
-	<!-- Header -->
+	{#if !embedded}
+	<!-- Header (standalone mode only) -->
 	<div
 		class="flex items-center justify-between border-b px-3 py-2"
 		style="border-color: var(--color-border-subtle);"
@@ -70,6 +72,7 @@
 			<FolderOpen size={12} />
 		</button>
 	</div>
+	{/if}
 
 	<!-- Import list -->
 	<div class="flex-1 overflow-y-auto py-1">
@@ -144,7 +147,8 @@
 		{/if}
 	</div>
 
-	<!-- Footer -->
+	{#if !embedded}
+	<!-- Footer (standalone mode only) -->
 	<div class="border-t px-3 py-2.5" style="border-color: var(--color-border-subtle);">
 		<button
 			onclick={onOpenFolder}
@@ -155,4 +159,5 @@
 			Open folder to save
 		</button>
 	</div>
+	{/if}
 </div>

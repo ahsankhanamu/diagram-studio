@@ -125,6 +125,7 @@
 					<ImportExplorer
 						bind:this={importExplorerRef}
 						activeImportId={activeImportId}
+						embedded={true}
 						onSwitch={onOpenImport}
 						onDelete={onDeleteImport}
 						onLinkToFile={onLinkImportToFile}
