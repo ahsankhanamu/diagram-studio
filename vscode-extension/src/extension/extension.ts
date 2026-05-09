@@ -84,39 +84,56 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 
-  // Export selected diagrams as HTML
+  // Export selected diagrams as HTML (also used for folder hover and toolbar button).
+  // Priority: explicit multi-selection args → folder context → single file context
+  //           → active tree view selection → all diagrams in workspace.
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "diagramStudio.exportSelectedAsHtml",
       async (...args: unknown[]) => {
-        // Args come from context menu: first is the clicked item, second is the
-        // full selection array (VS Code passes both when canSelectMany = true).
-        let selected: DiagramTreeItem[] = [];
         const toDiagramItems = (nodes: readonly DiagramTreeNode[]): DiagramTreeItem[] =>
           nodes.flatMap(n => n.kind === "folder" ? n.children : [n]);
 
+        let selected: DiagramTreeItem[] = [];
+        let titleHint = "";
+
         if (Array.isArray(args[1]) && args[1].length > 0) {
+          // VS Code passes the full multi-selection array as args[1]
           selected = toDiagramItems(args[1] as DiagramTreeNode[]);
         } else if ((args[0] as DiagramTreeNode)?.kind === "folder") {
-          selected = (args[0] as DiagramFolderItem).children;
+          const folder = args[0] as DiagramFolderItem;
+          selected = folder.children;
+          titleHint = folder.label as string;
         } else if ((args[0] as DiagramTreeNode)?.kind === "diagram") {
           selected = [args[0] as DiagramTreeItem];
         } else {
-          selected = toDiagramItems(treeView.selection);
+          // Toolbar button with no context — use whichever tree view has a selection
+          const viewSel = treeView.selection.length > 0
+            ? treeView.selection
+            : explorerPanelView.selection;
+          selected = toDiagramItems(viewSel);
         }
 
+        // Final fallback: export everything in the workspace
         if (selected.length === 0) {
-          vscode.window.showWarningMessage(
-            "Select one or more diagrams in the Diagram Studio panel first."
-          );
+          const all = await explorer.getAllDiagrams();
+          if (all.length === 0) {
+            vscode.window.showWarningMessage("No diagram files found in the workspace.");
+            return;
+          }
+          const wsName = vscode.workspace.workspaceFolders?.[0]?.name ?? "Diagrams";
+          await exportDiagramsAsHtml(all.map(d => d.diagram), wsName, all[0].uri);
           return;
         }
 
+        const title = titleHint ||
+          (selected.length === 1
+            ? (selected[0].label as string)
+            : vscode.workspace.workspaceFolders?.[0]?.name ?? "Diagrams");
+
         await exportDiagramsAsHtml(
           selected.map((i) => i.data),
-          selected.length === 1
-            ? (selected[0].label as string)
-            : vscode.workspace.workspaceFolders?.[0]?.name ?? "Diagrams",
+          title,
           selected[0].resourceUri
         );
       }
