@@ -1,22 +1,26 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Trash2, FolderOpen } from 'lucide-svelte';
+	import { Trash2, FolderOpen, Link, FileCode } from 'lucide-svelte';
 	import type { DiagramFile } from '$lib/types/diagram';
-	import { listImports } from '$lib/engine/import-cache';
+	import { listImports, loadAllImportHandleNames } from '$lib/engine/import-cache';
 
 	interface Props {
 		activeImportId: string;
 		onSwitch: (diagram: DiagramFile) => void;
 		onDelete: (id: string) => void;
+		onLinkToFile: (id: string) => void;
 		onOpenFolder: () => void;
 	}
 
-	let { activeImportId, onSwitch, onDelete, onOpenFolder }: Props = $props();
+	let { activeImportId, onSwitch, onDelete, onLinkToFile, onOpenFolder }: Props = $props();
+
 	let imports = $state<DiagramFile[]>([]);
+	let linkedNames = $state<Map<string, string>>(new Map());
 
 	export async function refresh() {
 		const all = await listImports();
 		imports = all.sort((a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? ''));
+		linkedNames = await loadAllImportHandleNames(imports.map((d) => d.id));
 	}
 
 	onMount(refresh);
@@ -70,19 +74,21 @@
 	<!-- Import list -->
 	<div class="flex-1 overflow-y-auto py-1">
 		{#each imports as d (d.id)}
+			{@const isActive = d.id === activeImportId}
+			{@const linkedFile = linkedNames.get(d.id)}
 			<div
 				onclick={() => onSwitch(d)}
-				class="group flex cursor-pointer items-center gap-2.5 px-3 py-2 transition-colors"
-				style="background: {d.id === activeImportId ? 'var(--color-hover-overlay)' : 'transparent'};"
-				onmouseenter={(e) => { if (d.id !== activeImportId) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)'; }}
-				onmouseleave={(e) => { if (d.id !== activeImportId) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+				class="group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors"
+				style="background: {isActive ? 'var(--color-hover-overlay)' : 'transparent'};"
+				onmouseenter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)'; }}
+				onmouseleave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
 				role="treeitem"
 				tabindex="0"
 				onkeydown={(e) => { if (e.key === 'Enter') onSwitch(d); }}
 			>
 				<!-- Type dot -->
 				<div
-					class="mt-0.5 h-2 w-2 flex-shrink-0 rounded-full"
+					class="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full"
 					style="background: {TYPE_DOT[d.diagramType] ?? '#6b7280'};"
 				></div>
 
@@ -90,26 +96,44 @@
 				<div class="min-w-0 flex-1">
 					<div
 						class="truncate text-xs font-medium"
-						style="color: {d.id === activeImportId ? 'var(--color-accent)' : 'var(--color-text-primary)'};"
+						style="color: {isActive ? 'var(--color-accent)' : 'var(--color-text-primary)'};"
 					>
 						{d.name || 'Untitled'}
 					</div>
 					<div class="text-[10px]" style="color: var(--color-text-muted);">
 						{d.diagramType} · {relTime(d.modifiedAt)}
 					</div>
+					{#if linkedFile}
+						<div class="mt-0.5 flex items-center gap-1 text-[10px]" style="color: var(--color-accent);">
+							<FileCode size={9} />
+							<span class="truncate">{linkedFile}</span>
+						</div>
+					{/if}
 				</div>
 
-				<!-- Delete -->
-				<button
-					onclick={(e) => { e.stopPropagation(); onDelete(d.id); }}
-					class="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded opacity-0 transition-all group-hover:opacity-100"
-					style="color: var(--color-text-muted);"
-					title="Remove import"
-					onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.color = '#ef4444'; }}
-					onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)'; }}
-				>
-					<Trash2 size={11} />
-				</button>
+				<!-- Action buttons (visible on hover) -->
+				<div class="flex flex-shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+					<button
+						onclick={(e) => { e.stopPropagation(); onLinkToFile(d.id); }}
+						class="flex h-5 w-5 items-center justify-center rounded transition-colors"
+						style="color: {linkedFile ? 'var(--color-accent)' : 'var(--color-text-muted)'};"
+						title={linkedFile ? `Linked to ${linkedFile} — click to re-link` : 'Link to HTML file'}
+						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--color-accent)')}
+						onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.color = linkedFile ? 'var(--color-accent)' : 'var(--color-text-muted)')}
+					>
+						<Link size={11} />
+					</button>
+					<button
+						onclick={(e) => { e.stopPropagation(); onDelete(d.id); }}
+						class="flex h-5 w-5 items-center justify-center rounded transition-colors"
+						style="color: var(--color-text-muted);"
+						title="Remove import"
+						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.color = '#ef4444')}
+						onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.color = 'var(--color-text-muted)')}
+					>
+						<Trash2 size={11} />
+					</button>
+				</div>
 			</div>
 		{/each}
 

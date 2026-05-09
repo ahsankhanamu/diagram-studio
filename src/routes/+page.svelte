@@ -64,7 +64,7 @@
 	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
 	import { startLinter } from '$lib/stores/linterStore';
 	import { isVSCodeWebview, postToExtension, onExtensionMessage } from '$lib/engine/vscode-bridge';
-	import { saveImport, loadImport, removeImport, listImports } from '$lib/engine/import-cache';
+	import { saveImport, loadImport, removeImport, listImports, saveImportHandle, loadImportHandle } from '$lib/engine/import-cache';
 	import ImportExplorer from '$lib/components/editor/ImportExplorer.svelte';
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
@@ -378,6 +378,39 @@
 		requestAnimationFrame(() => editorRef?.fitView());
 	}
 
+	async function handleLinkImportToFile(id: string) {
+		// Make sure the target import is active so we save the right content
+		const targetDiagram = await loadImport(id);
+		if (!targetDiagram) return;
+
+		// If this isn't the active import, switch to it first
+		if (id !== importModeId) {
+			handleImportSwitch(targetDiagram);
+			// Allow the store to settle before we read from it
+			await new Promise((r) => requestAnimationFrame(r));
+		}
+
+		try {
+			const handle = await (window as any).showSaveFilePicker({
+				suggestedName: `${targetDiagram.name || 'Diagram'}.html`,
+				types: [{ description: 'HTML File', accept: { 'text/html': ['.html'] } }]
+			});
+			// Write current diagram as fresh HTML
+			const currentNodes = Array.from(get(nodes).values());
+			const currentEdges = Array.from(get(edges).values());
+			const diagram = buildDiagramFile();
+			if (!diagram) return;
+			const html = generateDiagramHtml({ ...diagram, id: importModeId }, currentNodes, currentEdges);
+			const writable = await handle.createWritable({ keepExistingData: false });
+			await writable.write(html);
+			await writable.close();
+			await saveImportHandle(id, handle);
+			importExplorerRef?.refresh();
+		} catch {
+			// user cancelled
+		}
+	}
+
 	async function handleImportDelete(id: string) {
 		await removeImport(id);
 		const isActive = id === importModeId;
@@ -440,8 +473,25 @@
 			diagramMeta.update((m) => m ? { ...m, version: diagram.version } : m);
 			try {
 				await saveImport({ ...diagram, id: importModeId });
-				importExplorerRef?.refresh();
 			} catch { /* non-fatal */ }
+
+			// Also flush to linked HTML file on disk if one exists
+			try {
+				const handle = await loadImportHandle(importModeId);
+				if (handle) {
+					const perm = await (handle as any).queryPermission({ mode: 'readwrite' });
+					if (perm === 'granted' || (await (handle as any).requestPermission({ mode: 'readwrite' })) === 'granted') {
+						const currentNodes = Array.from(get(nodes).values());
+						const currentEdges = Array.from(get(edges).values());
+						const html = generateDiagramHtml({ ...diagram, id: importModeId }, currentNodes, currentEdges);
+						const writable = await handle.createWritable({ keepExistingData: false });
+						await writable.write(html);
+						await writable.close();
+					}
+				}
+			} catch { /* non-fatal — file may have been moved/deleted */ }
+
+			importExplorerRef?.refresh();
 			lastWrittenSnapshot = currentSnapshot;
 			isDirty.set(false);
 			saveStatus.set('saved');
@@ -952,6 +1002,7 @@
 								activeImportId={importModeId}
 								onSwitch={handleImportSwitch}
 								onDelete={handleImportDelete}
+								onLinkToFile={handleLinkImportToFile}
 								onOpenFolder={async () => {
 									const ok = await openWorkspace();
 									if (ok) {

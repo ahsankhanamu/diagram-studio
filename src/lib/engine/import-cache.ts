@@ -1,25 +1,34 @@
 import type { DiagramFile } from '$lib/types/diagram';
 
 const DB_NAME = 'diagram-studio-imports';
-const STORE = 'diagrams';
-const VERSION = 1;
+const DIAGRAM_STORE = 'diagrams';
+const HANDLE_STORE = 'handles';
+const VERSION = 2;
 
 function openImportDB(): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
 		const req = indexedDB.open(DB_NAME, VERSION);
 		req.onupgradeneeded = () => {
-			req.result.createObjectStore(STORE, { keyPath: 'id' });
+			const db = req.result;
+			if (!db.objectStoreNames.contains(DIAGRAM_STORE)) {
+				db.createObjectStore(DIAGRAM_STORE, { keyPath: 'id' });
+			}
+			if (!db.objectStoreNames.contains(HANDLE_STORE)) {
+				db.createObjectStore(HANDLE_STORE);
+			}
 		};
 		req.onsuccess = () => resolve(req.result);
 		req.onerror = () => reject(req.error);
 	});
 }
 
+// ── Diagram entries ────────────────────────────────────────────────────
+
 export async function saveImport(diagram: DiagramFile): Promise<void> {
 	const db = await openImportDB();
 	return new Promise((resolve, reject) => {
-		const tx = db.transaction(STORE, 'readwrite');
-		tx.objectStore(STORE).put(diagram);
+		const tx = db.transaction(DIAGRAM_STORE, 'readwrite');
+		tx.objectStore(DIAGRAM_STORE).put(diagram);
 		tx.oncomplete = () => resolve();
 		tx.onerror = () => reject(tx.error);
 	});
@@ -29,8 +38,8 @@ export async function loadImport(id: string): Promise<DiagramFile | null> {
 	try {
 		const db = await openImportDB();
 		return new Promise((resolve) => {
-			const tx = db.transaction(STORE, 'readonly');
-			const req = tx.objectStore(STORE).get(id);
+			const tx = db.transaction(DIAGRAM_STORE, 'readonly');
+			const req = tx.objectStore(DIAGRAM_STORE).get(id);
 			req.onsuccess = () => resolve(req.result ?? null);
 			req.onerror = () => resolve(null);
 		});
@@ -43,8 +52,8 @@ export async function listImports(): Promise<DiagramFile[]> {
 	try {
 		const db = await openImportDB();
 		return new Promise((resolve) => {
-			const tx = db.transaction(STORE, 'readonly');
-			const req = tx.objectStore(STORE).getAll();
+			const tx = db.transaction(DIAGRAM_STORE, 'readonly');
+			const req = tx.objectStore(DIAGRAM_STORE).getAll();
 			req.onsuccess = () => resolve(req.result ?? []);
 			req.onerror = () => resolve([]);
 		});
@@ -56,13 +65,63 @@ export async function listImports(): Promise<DiagramFile[]> {
 export async function removeImport(id: string): Promise<void> {
 	try {
 		const db = await openImportDB();
-		return new Promise((resolve) => {
-			const tx = db.transaction(STORE, 'readwrite');
-			tx.objectStore(STORE).delete(id);
+		await new Promise<void>((resolve) => {
+			const tx = db.transaction(DIAGRAM_STORE, 'readwrite');
+			tx.objectStore(DIAGRAM_STORE).delete(id);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => resolve();
 		});
+	} catch { /* ignore */ }
+	await removeImportHandle(id);
+}
+
+// ── File handle links ──────────────────────────────────────────────────
+// FileSystemFileHandle is structured-cloneable and can live in IndexedDB.
+
+export async function saveImportHandle(id: string, handle: FileSystemFileHandle): Promise<void> {
+	try {
+		const db = await openImportDB();
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction(HANDLE_STORE, 'readwrite');
+			tx.objectStore(HANDLE_STORE).put(handle, id);
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+		});
+	} catch { /* non-fatal */ }
+}
+
+export async function loadImportHandle(id: string): Promise<FileSystemFileHandle | null> {
+	try {
+		const db = await openImportDB();
+		return new Promise((resolve) => {
+			const tx = db.transaction(HANDLE_STORE, 'readonly');
+			const req = tx.objectStore(HANDLE_STORE).get(id);
+			req.onsuccess = () => resolve(req.result ?? null);
+			req.onerror = () => resolve(null);
+		});
 	} catch {
-		// ignore
+		return null;
 	}
+}
+
+export async function removeImportHandle(id: string): Promise<void> {
+	try {
+		const db = await openImportDB();
+		return new Promise((resolve) => {
+			const tx = db.transaction(HANDLE_STORE, 'readwrite');
+			tx.objectStore(HANDLE_STORE).delete(id);
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => resolve();
+		});
+	} catch { /* ignore */ }
+}
+
+/** Returns a map of import ID → linked filename for all IDs that have a handle. */
+export async function loadAllImportHandleNames(ids: string[]): Promise<Map<string, string>> {
+	const result = new Map<string, string>();
+	for (const id of ids) {
+		const handle = await loadImportHandle(id);
+		if (handle) result.set(id, handle.name);
+	}
+	return result;
 }
