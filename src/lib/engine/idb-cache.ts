@@ -11,9 +11,10 @@
 import type { DiagramFile } from '$lib/types/diagram';
 
 const DB_NAME = 'diagram-studio';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const WORKSPACE_STORE = 'workspace';
 const DIAGRAMS_STORE = 'diagrams';
+const ROOTS_STORE = 'roots';
 
 interface CachedDiagram {
 	fileName: string;
@@ -36,6 +37,9 @@ export function openDB(): Promise<IDBDatabase> {
 			}
 			if (!db.objectStoreNames.contains(DIAGRAMS_STORE)) {
 				db.createObjectStore(DIAGRAMS_STORE, { keyPath: 'fileName' });
+			}
+			if (!db.objectStoreNames.contains(ROOTS_STORE)) {
+				db.createObjectStore(ROOTS_STORE);
 			}
 		};
 		req.onsuccess = () => resolve(req.result);

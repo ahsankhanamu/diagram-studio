@@ -30,12 +30,18 @@
 
 	interface Props {
 		activeFile: string;
+		/** When set, uses this handle instead of effectiveHandle (for multi-root). */
+		handle?: FileSystemDirectoryHandle;
+		/** When true, suppresses the header row (WorkspacePanel renders its own). */
+		embedded?: boolean;
 		onFileSelect: (fileName: string) => void;
 		onFileCreated: (fileName: string) => void;
 		onFileDeleted: (fileName: string) => void;
 	}
 
-	let { activeFile, onFileSelect, onFileCreated, onFileDeleted }: Props = $props();
+	let { activeFile, handle, embedded = false, onFileSelect, onFileCreated, onFileDeleted }: Props = $props();
+
+	let effectiveHandle = $derived(handle ?? effectiveHandle);
 
 	let entries = $state<FileEntry[]>([]);
 	let expandedFolders = $state<Set<string>>(new Set());
@@ -151,7 +157,7 @@
 	async function menuOpenInExplorer(entry: FileEntry) {
 		closeMenu();
 		// Resolve the parent handle for nested entries so the dialog opens at the right folder
-		let startIn: FileSystemDirectoryHandle | undefined = $directoryHandle ?? undefined;
+		let startIn: FileSystemDirectoryHandle | undefined = effectiveHandle ?? undefined;
 		if (startIn && entry.name.includes('/')) {
 			try {
 				const parentFolder = entry.name.split('/').slice(0, -1).join('/');
@@ -169,12 +175,15 @@
 
 	// ─── File operations ────────────────────────────────────────
 	export async function refresh() {
-		if (!$directoryHandle) return;
-		entries = await listEntries($directoryHandle);
+		if (!effectiveHandle) return;
+		entries = await listEntries(effectiveHandle);
 	}
 
 	$effect(() => {
-		if ($directoryHandle) refresh();
+		if (effectiveHandle) {
+			effectiveHandle; // reactive dependency
+			refresh();
+		}
 	});
 
 	async function toggleFolder(folderName: string) {
@@ -183,9 +192,9 @@
 			next.delete(folderName);
 		} else {
 			next.add(folderName);
-			if ($directoryHandle) {
+			if (effectiveHandle) {
 				try {
-					const folderHandle = await $directoryHandle.getDirectoryHandle(folderName);
+					const folderHandle = await effectiveHandle.getDirectoryHandle(folderName);
 					const contents = await listEntries(folderHandle);
 					folderEntries = new Map(folderEntries);
 					folderEntries.set(folderName, contents);
@@ -206,11 +215,11 @@
 	}
 
 	async function handleNewFile() {
-		if (!$directoryHandle) return;
+		if (!effectiveHandle) return;
 		const name = getNextUntitledName();
 		const diagram = createEmptyDiagram(name);
 		const fileName = `${name}.json`;
-		await writeDiagramFile($directoryHandle, fileName, diagram);
+		await writeDiagramFile(effectiveHandle, fileName, diagram);
 		await refresh();
 		onFileCreated(fileName);
 	}
@@ -221,11 +230,11 @@
 	}
 
 	async function handleOpenInFinder() {
-		if (!$directoryHandle) return;
+		if (!effectiveHandle) return;
 		try {
 			await (window as any).showDirectoryPicker({
 				mode: 'readwrite',
-				startIn: $directoryHandle
+				startIn: effectiveHandle
 			});
 		} catch {
 			// User cancelled
@@ -233,12 +242,12 @@
 	}
 
 	async function commitNewFolder() {
-		if (!$directoryHandle || !newName.trim()) {
+		if (!effectiveHandle || !newName.trim()) {
 			creatingNew = null;
 			return;
 		}
 		try {
-			await createFolder($directoryHandle, newName.trim());
+			await createFolder(effectiveHandle, newName.trim());
 			await refresh();
 		} catch {
 			// ignore
@@ -253,7 +262,7 @@
 	}
 
 	async function commitRename(oldName: string, isFile: boolean) {
-		if (!$directoryHandle || !renameValue.trim()) {
+		if (!effectiveHandle || !renameValue.trim()) {
 			renamingEntry = null;
 			return;
 		}
@@ -263,14 +272,14 @@
 			try {
 				if (isFile) {
 					const diagram = await import('$lib/engine/fs-access').then((m) =>
-						m.readDiagramFile($directoryHandle!, oldName)
+						m.readDiagramFile(effectiveHandle!, oldName)
 					);
 					if (diagram) {
 						diagram.name = renameValue.trim();
-						await writeDiagramFile($directoryHandle!, newFileName, diagram);
-						await $directoryHandle!.removeEntry(oldName);
+						await writeDiagramFile(effectiveHandle!, newFileName, diagram);
+						await effectiveHandle!.removeEntry(oldName);
 					} else {
-						await renameEntry($directoryHandle!, oldName, newFileName);
+						await renameEntry(effectiveHandle!, oldName, newFileName);
 					}
 				}
 				await refresh();
@@ -285,9 +294,9 @@
 	}
 
 	async function handleDelete(entry: FileEntry) {
-		if (!$directoryHandle) return;
+		if (!effectiveHandle) return;
 		try {
-			await deleteEntry($directoryHandle, entry.name);
+			await deleteEntry(effectiveHandle, entry.name);
 			await refresh();
 			if (activeFile === entry.name) {
 				onFileDeleted(entry.name);
@@ -319,7 +328,8 @@
 <svelte:window onclick={handleWindowClick} onkeydown={handleWindowKeydown} />
 
 <div class="flex flex-col overflow-hidden" style="flex: 1;">
-	<!-- Header -->
+	{#if !embedded}
+	<!-- Header (only shown in standalone mode) -->
 	<div
 		class="flex items-center justify-between border-b px-3 py-2"
 		style="border-color: var(--color-border-subtle);"
@@ -360,6 +370,7 @@
 			</button>
 		</div>
 	</div>
+	{/if}
 
 	<!-- File list -->
 	<div class="flex-1 overflow-y-auto py-1">

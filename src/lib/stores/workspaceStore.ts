@@ -1,21 +1,29 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import {
 	pickDirectory,
 	saveHandleToIDB,
 	loadHandleFromIDB,
 	clearHandleFromIDB,
 	verifyPermission,
-	isFileSystemAccessSupported
+	isFileSystemAccessSupported,
+	saveRootsToIDB,
+	loadRootsFromIDB
 } from '$lib/engine/fs-access';
 
-export const directoryHandle = writable<FileSystemDirectoryHandle | null>(null);
-export const workspaceName = writable<string>('');
-export const workspaceReady = derived(directoryHandle, ($h) => $h !== null);
+export type FolderRoot = { handle: FileSystemDirectoryHandle; name: string };
+
+export const folderRoots = writable<FolderRoot[]>([]);
 export const fsAccessSupported = writable(false);
 
+// Backward-compat aliases — derived from the roots array
+export const workspaceReady = derived(folderRoots, ($r) => $r.length > 0);
+export const directoryHandle = derived(folderRoots, ($r) => $r[0]?.handle ?? null);
+export const workspaceName = derived(folderRoots, ($r) =>
+	$r.length === 1 ? $r[0].name : $r.length > 1 ? `${$r.length} folders` : ''
+);
+
 /**
- * Try to restore a previously-opened workspace from IndexedDB.
- * Must be called from a user-gesture context to re-prompt permission.
+ * Restore all previously-opened folders from IndexedDB.
  */
 export async function restoreWorkspace(prompt = false): Promise<boolean> {
 	if (!isFileSystemAccessSupported()) {
@@ -24,35 +32,64 @@ export async function restoreWorkspace(prompt = false): Promise<boolean> {
 	}
 	fsAccessSupported.set(true);
 
+	// Try new multi-root format first
+	const rootHandles = await loadRootsFromIDB();
+	if (rootHandles.length > 0) {
+		const valid: FolderRoot[] = [];
+		for (const handle of rootHandles) {
+			if (await verifyPermission(handle, prompt)) {
+				valid.push({ handle, name: handle.name });
+			}
+		}
+		if (valid.length > 0) {
+			folderRoots.set(valid);
+			return true;
+		}
+	}
+
+	// Fall back to legacy single-handle format
 	const handle = await loadHandleFromIDB();
 	if (!handle) return false;
-
-	const granted = await verifyPermission(handle, prompt);
-	if (!granted) return false;
-
-	directoryHandle.set(handle);
-	workspaceName.set(handle.name);
+	if (!(await verifyPermission(handle, prompt))) return false;
+	const root: FolderRoot = { handle, name: handle.name };
+	folderRoots.set([root]);
+	await saveRootsToIDB([handle]);
 	return true;
 }
 
-/**
- * Open a new workspace via the native directory picker.
- */
-export async function openWorkspace(): Promise<boolean> {
+/** Open the directory picker and ADD the chosen folder as a new root. */
+export async function addFolderRoot(): Promise<boolean> {
 	const handle = await pickDirectory();
 	if (!handle) return false;
-
-	await saveHandleToIDB(handle);
-	directoryHandle.set(handle);
-	workspaceName.set(handle.name);
+	const current = get(folderRoots);
+	const updated = [...current, { handle, name: handle.name }];
+	folderRoots.set(updated);
+	await saveRootsToIDB(updated.map((r) => r.handle));
+	// Keep legacy single-handle in sync (first root)
+	await saveHandleToIDB(updated[0].handle);
 	return true;
 }
 
-/**
- * Close the current workspace.
- */
+/** Remove a folder root by index. */
+export async function removeFolderRoot(index: number): Promise<void> {
+	const current = get(folderRoots);
+	const updated = current.filter((_, i) => i !== index);
+	folderRoots.set(updated);
+	await saveRootsToIDB(updated.map((r) => r.handle));
+	if (updated.length > 0) {
+		await saveHandleToIDB(updated[0].handle);
+	} else {
+		await clearHandleFromIDB();
+	}
+}
+
+/** Backward-compat: opens a folder picker and adds it as a root. */
+export async function openWorkspace(): Promise<boolean> {
+	return addFolderRoot();
+}
+
 export async function closeWorkspace(): Promise<void> {
 	await clearHandleFromIDB();
-	directoryHandle.set(null);
-	workspaceName.set('');
+	await saveRootsToIDB([]);
+	folderRoots.set([]);
 }

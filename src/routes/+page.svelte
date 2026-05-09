@@ -5,7 +5,6 @@
 	import DiagramEditor from '$lib/components/editor/DiagramEditor.svelte';
 	import EditorToolbar from '$lib/components/editor/EditorToolbar.svelte';
 	import NodePalette from '$lib/components/editor/NodePalette.svelte';
-	import FileExplorer from '$lib/components/editor/FileExplorer.svelte';
 	import PropertiesPanel from '$lib/components/editor/PropertiesPanel.svelte';
 	import ShapeLibrary from '$lib/components/editor/ShapeLibrary.svelte';
 	import { FolderOpen, HardDrive, Files, Shapes, BookOpen } from 'lucide-svelte';
@@ -55,17 +54,20 @@
 	import { cacheDiagram, getCachedDiagram, markFsSynced } from '$lib/engine/idb-cache';
 	import { buildCanonicalSnapshot } from '$lib/engine/content-hash';
 	import {
+		folderRoots,
 		directoryHandle,
 		workspaceReady,
 		workspaceName,
 		restoreWorkspace,
-		openWorkspace
+		openWorkspace,
+		addFolderRoot,
+		removeFolderRoot
 	} from '$lib/stores/workspaceStore';
 	import { leftPanelOpen, leftPanelWidth, rightPanelOpen, rightPanelWidth, activeTab } from '$lib/stores/sidebarStore';
 	import { startLinter } from '$lib/stores/linterStore';
 	import { isVSCodeWebview, postToExtension, onExtensionMessage } from '$lib/engine/vscode-bridge';
-	import { saveImport, loadImport, removeImport, listImports, saveImportHandle, loadImportHandle } from '$lib/engine/import-cache';
-	import ImportExplorer from '$lib/components/editor/ImportExplorer.svelte';
+	import { saveImport, loadImport, removeImport, listImportMeta, saveImportHandle, loadImportHandle } from '$lib/engine/import-cache';
+	import WorkspacePanel from '$lib/components/editor/WorkspacePanel.svelte';
 	import ResizeHandle from '$lib/components/editor/ResizeHandle.svelte';
 	import JsonEditor from '$lib/components/editor/JsonEditor.svelte';
 	import LintPanel from '$lib/components/editor/LintPanel.svelte';
@@ -78,7 +80,6 @@
 	let externalChangeToast = $state(false);
 	let fileWatcher: FileWatcher | null = null;
 	let dirWatcher: DirectoryWatcher | null = null;
-	let fileExplorerRef: FileExplorer | undefined = $state();
 	let editorRef: DiagramEditor | undefined = $state();
 	let savePending = false;
 	let suppressDimensionChanges = false;
@@ -90,9 +91,12 @@
 	let showJsonEditor = $state(false);
 	let showExportDialog = $state(false);
 	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
-	let importMode = $state(false);
+	// 'imports' = active file is a browser import; number = index into $folderRoots
+	let activeSource = $state<'imports' | number | null>(null);
 	let importModeId = $state('');
-	let importExplorerRef: ImportExplorer | undefined = $state();
+	let activeFolderHandle = $state<FileSystemDirectoryHandle | null>(null);
+	let hasImports = $state(false);
+	let workspacePanelRef: WorkspacePanel | undefined = $state();
 
 	// ── Autosave: direct callback from mutations ──────────────────────
 	// No $effect, no subscriptions, no reactivity.
@@ -102,7 +106,7 @@
 	const SAVE_DEBOUNCE = 800;
 
 	function scheduleSave() {
-		if (!activeFile && !importMode) return;
+		if (!activeFile && activeSource !== 'imports') return;
 		savePending = true;
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(performSave, SAVE_DEBOUNCE);
@@ -158,29 +162,36 @@
 				await saveImport(diagram);
 				sessionStorage.setItem('ds-import-id', diagram.id);
 				loadDiagramFlat(diagram);
-				importMode = true;
+				activeSource = 'imports';
 				importModeId = diagram.id;
+				hasImports = true;
 				history.replaceState(null, '', location.pathname);
 			} catch {
-				// malformed hash — fall through to normal workspace flow
 				await restoreWorkspace(false);
 			}
 			loading = false;
 		} else {
-			// Check if a previous tab session had an imported diagram
+			// Check imports in IDB first (lazy — metadata only)
+			const meta = await listImportMeta();
+			hasImports = meta.length > 0;
+
+			// Restore previously active import for this tab
 			const savedImportId = sessionStorage.getItem('ds-import-id');
-			if (savedImportId) {
+			if (savedImportId && meta.some((m) => m.id === savedImportId)) {
 				const diagram = await loadImport(savedImportId);
 				if (diagram) {
 					loadDiagramFlat(diagram);
-					importMode = true;
+					activeSource = 'imports';
 					importModeId = savedImportId;
+					// Also restore any folder workspaces in the background
+					restoreWorkspace(false);
 					loading = false;
 					return;
 				} else {
 					sessionStorage.removeItem('ds-import-id');
 				}
 			}
+
 			await restoreWorkspace(false);
 			loading = false;
 		}
@@ -196,9 +207,10 @@
 		removeVscodeListener?.();
 	});
 
-	// When workspace becomes ready, auto-open first file or create Untitled
+	// When a folder workspace becomes ready and no file is open, auto-open first file
 	$effect(() => {
-		if (!vscodeMode && $workspaceReady && $directoryHandle && !activeFile) {
+		if (!vscodeMode && $workspaceReady && $directoryHandle && !activeFile && activeSource !== 'imports') {
+			if (!activeFolderHandle) activeFolderHandle = get(directoryHandle);
 			autoOpenFile();
 		}
 	});
@@ -210,15 +222,20 @@
 			let debounceTimer: ReturnType<typeof setTimeout>;
 			dirWatcher = watchDirectory($directoryHandle, () => {
 				clearTimeout(debounceTimer);
-				debounceTimer = setTimeout(() => fileExplorerRef?.refresh(), 300);
+				debounceTimer = setTimeout(() => {
+					const idx = $folderRoots.findIndex((r) => r.handle === $directoryHandle);
+					if (idx >= 0) workspacePanelRef?.refreshFolder(idx);
+				}, 300);
 			});
 		}
 	});
 
 	async function autoOpenFile() {
-		if (!$directoryHandle) return;
+		const rootHandle = activeFolderHandle ?? get(directoryHandle);
+		if (!rootHandle) return;
+		if (!activeFolderHandle) activeFolderHandle = rootHandle;
 		const { listEntries } = await import('$lib/engine/fs-access');
-		const entries = await listEntries($directoryHandle);
+		const entries = await listEntries(rootHandle);
 
 		// Try to restore the last opened file
 		const lastFile = localStorage.getItem('diagram-studio-active-file');
@@ -236,8 +253,9 @@
 		} else {
 			const diagram = createEmptyDiagram('Untitled');
 			const fileName = 'Untitled.json';
-			await writeDiagramFile($directoryHandle, fileName, diagram);
-			fileExplorerRef?.refresh();
+			await writeDiagramFile(rootHandle, fileName, diagram);
+			const idx = $folderRoots.findIndex((r) => r.handle === rootHandle);
+			if (idx >= 0) workspacePanelRef?.refreshFolder(idx);
 			await openFile(fileName);
 		}
 	}
@@ -245,13 +263,14 @@
 	// ── File open / load ───────────────────────────────────────────────
 
 	async function openFile(fileName: string) {
-		if (!$directoryHandle) return;
+		const rootHandle = activeFolderHandle ?? get(directoryHandle);
+		if (!rootHandle) return;
 
 		fileWatcher?.stop();
 		fileWatcher = null;
 		syncStatus = 'disconnected';
 
-		let dirHandle = $directoryHandle;
+		let dirHandle = rootHandle;
 		let actualFileName = fileName;
 		if (fileName.includes('/')) {
 			const parts = fileName.split('/');
@@ -370,23 +389,25 @@
 		diagramMeta.set(null);
 	}
 
-	function handleImportSwitch(diagram: DiagramFile) {
-		importModeId = diagram.id;
-		sessionStorage.setItem('ds-import-id', diagram.id);
+	async function handleOpenImport(id: string) {
+		const diagram = await loadImport(id);
+		if (!diagram) return;
+		importModeId = id;
+		activeSource = 'imports';
+		activeFolderHandle = null;
+		activeFile = '';
+		sessionStorage.setItem('ds-import-id', id);
 		loadDiagramFlat(diagram);
 		clearHistory();
 		requestAnimationFrame(() => editorRef?.fitView());
 	}
 
 	async function handleLinkImportToFile(id: string) {
-		// Make sure the target import is active so we save the right content
 		const targetDiagram = await loadImport(id);
 		if (!targetDiagram) return;
 
-		// If this isn't the active import, switch to it first
 		if (id !== importModeId) {
-			handleImportSwitch(targetDiagram);
-			// Allow the store to settle before we read from it
+			await handleOpenImport(id);
 			await new Promise((r) => requestAnimationFrame(r));
 		}
 
@@ -395,7 +416,6 @@
 				suggestedName: `${targetDiagram.name || 'Diagram'}.html`,
 				types: [{ description: 'HTML File', accept: { 'text/html': ['.html'] } }]
 			});
-			// Write current diagram as fresh HTML
 			const currentNodes = Array.from(get(nodes).values());
 			const currentEdges = Array.from(get(edges).values());
 			const diagram = buildDiagramFile();
@@ -405,33 +425,80 @@
 			await writable.write(html);
 			await writable.close();
 			await saveImportHandle(id, handle);
-			importExplorerRef?.refresh();
-		} catch {
-			// user cancelled
-		}
+			workspacePanelRef?.refreshImports();
+		} catch { /* user cancelled */ }
 	}
 
 	async function handleImportDelete(id: string) {
 		await removeImport(id);
+		const meta = await listImportMeta();
+		hasImports = meta.length > 0;
 		const isActive = id === importModeId;
 		if (isActive) {
-			const remaining = (await listImports()).sort(
-				(a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? '')
-			);
-			if (remaining.length > 0) {
-				handleImportSwitch(remaining[0]);
+			if (meta.length > 0) {
+				const next = meta.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt))[0];
+				await handleOpenImport(next.id);
 			} else {
 				sessionStorage.removeItem('ds-import-id');
-				importMode = false;
 				importModeId = '';
+				activeSource = $folderRoots.length > 0 ? 0 : null;
 				nodes.set(new Map());
 				edges.set(new Map());
 				diagramMeta.set(null);
-				await restoreWorkspace(false);
-				return;
+				if ($folderRoots.length > 0) autoOpenFile();
 			}
 		}
-		importExplorerRef?.refresh();
+		workspacePanelRef?.refreshImports();
+	}
+
+	function handleOpenFolderFile(handle: FileSystemDirectoryHandle, path: string) {
+		activeFolderHandle = handle;
+		activeSource = $folderRoots.findIndex((r) => r.handle === handle);
+		importModeId = '';
+		sessionStorage.removeItem('ds-import-id');
+		openFile(path);
+	}
+
+	function handleFolderFileCreated(handle: FileSystemDirectoryHandle, path: string) {
+		activeFolderHandle = handle;
+		activeSource = $folderRoots.findIndex((r) => r.handle === handle);
+		openFile(path);
+	}
+
+	function handleFolderFileDeleted(handle: FileSystemDirectoryHandle, path: string) {
+		if (activeFolderHandle === handle && activeFile === path) {
+			activeFile = '';
+			nodes.set(new Map());
+			edges.set(new Map());
+			diagramMeta.set(null);
+			fileWatcher?.stop();
+			fileWatcher = null;
+			autoOpenFile();
+		}
+	}
+
+	async function handleRemoveFolder(index: number) {
+		const root = $folderRoots[index];
+		await removeFolderRoot(index);
+		// If the active file was in this folder, reset
+		if (activeFolderHandle === root?.handle) {
+			activeFile = '';
+			activeFolderHandle = null;
+			fileWatcher?.stop();
+			fileWatcher = null;
+			nodes.set(new Map());
+			edges.set(new Map());
+			diagramMeta.set(null);
+			if ($folderRoots.length > 0) {
+				activeFolderHandle = $folderRoots[0].handle;
+				activeSource = 0;
+				autoOpenFile();
+			} else if (hasImports) {
+				activeSource = 'imports';
+			} else {
+				activeSource = null;
+			}
+		}
 	}
 
 	// ── Save pipeline ──────────────────────────────────────────────────
@@ -461,8 +528,8 @@
 	}
 
 	async function performSave() {
-		// Import mode: persist edits to IDB only (no filesystem)
-		if (importMode && importModeId) {
+		// Import mode: persist edits to IDB only (+ linked file if set)
+		if (activeSource === 'imports' && importModeId) {
 			const currentSnapshot = buildCanonicalSnapshot(get(nodes), get(edges));
 			if (currentSnapshot === lastWrittenSnapshot) {
 				savePending = false;
@@ -491,7 +558,7 @@
 				}
 			} catch { /* non-fatal — file may have been moved/deleted */ }
 
-			importExplorerRef?.refresh();
+			workspacePanelRef?.refreshImports();
 			lastWrittenSnapshot = currentSnapshot;
 			isDirty.set(false);
 			saveStatus.set('saved');
@@ -520,7 +587,7 @@
 		}
 
 		const file = activeFile;
-		const dirHandleVal = get(directoryHandle);
+		const dirHandleVal = activeFolderHandle ?? get(directoryHandle);
 
 		if (!file || !dirHandleVal) {
 			savePending = false;
@@ -796,27 +863,6 @@
 		}
 	}
 
-	function handleFileSelect(fileName: string) {
-		showJsonEditor = false;
-		openFile(fileName);
-	}
-
-	function handleFileCreated(fileName: string) {
-		openFile(fileName);
-	}
-
-	function handleFileDeleted(fileName: string) {
-		if (activeFile === fileName) {
-			activeFile = '';
-			nodes.set(new Map());
-			edges.set(new Map());
-			diagramMeta.set(null);
-			fileWatcher?.stop();
-			fileWatcher = null;
-			syncStatus = 'disconnected';
-			autoOpenFile();
-		}
-	}
 
 	let arrowKeyHistoryPushed = false;
 	let arrowKeyTimer: ReturnType<typeof setTimeout> | undefined;
@@ -996,32 +1042,21 @@
 
 					<!-- Tab content -->
 					{#if $activeTab === 'files'}
-						{#if importMode}
-							<ImportExplorer
-								bind:this={importExplorerRef}
-								activeImportId={importModeId}
-								onSwitch={handleImportSwitch}
-								onDelete={handleImportDelete}
-								onLinkToFile={handleLinkImportToFile}
-								onOpenFolder={async () => {
-									const ok = await openWorkspace();
-									if (ok) {
-										sessionStorage.removeItem('ds-import-id');
-										importMode = false;
-										importModeId = '';
-										handleWorkspaceChanged();
-									}
-								}}
-							/>
-						{:else}
-							<FileExplorer
-								bind:this={fileExplorerRef}
-								{activeFile}
-								onFileSelect={handleFileSelect}
-								onFileCreated={handleFileCreated}
-								onFileDeleted={handleFileDeleted}
-							/>
-						{/if}
+						<WorkspacePanel
+							bind:this={workspacePanelRef}
+							activeSource={activeSource}
+							activeImportId={importModeId}
+							{activeFile}
+							{activeFolderHandle}
+							{hasImports}
+							onOpenImport={handleOpenImport}
+							onDeleteImport={handleImportDelete}
+							onLinkImportToFile={handleLinkImportToFile}
+							onOpenFolderFile={handleOpenFolderFile}
+							onFileCreated={handleFolderFileCreated}
+							onFileDeleted={handleFolderFileDeleted}
+							onOpenImportFolder={async () => { await addFolderRoot(); }}
+						/>
 					{:else if $activeTab === 'nodes'}
 						<NodePalette />
 					{:else}
@@ -1076,8 +1111,8 @@
 		/>
 	{/if}
 
-	<!-- Import mode indicator pill -->
-	{#if importMode}
+	<!-- Browser import mode indicator -->
+	{#if activeSource === 'imports'}
 		<div
 			class="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-md pointer-events-none"
 			style="background: var(--color-bg-surface); border-color: var(--color-border-primary); color: var(--color-text-muted);"
@@ -1087,8 +1122,8 @@
 		</div>
 	{/if}
 
-	<!-- Workspace picker modal — shown when no folder is open, overlays the app -->
-	{#if !vscodeMode && !$workspaceReady && !importMode}
+	<!-- Workspace picker modal — only when truly empty (no folders AND no imports) -->
+	{#if !vscodeMode && !$workspaceReady && !hasImports}
 		<div
 			class="fixed inset-0 z-50 flex items-center justify-center"
 			style="background: rgba(0,0,0,0.25); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);"

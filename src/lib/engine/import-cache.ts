@@ -3,7 +3,15 @@ import type { DiagramFile } from '$lib/types/diagram';
 const DB_NAME = 'diagram-studio-imports';
 const DIAGRAM_STORE = 'diagrams';
 const HANDLE_STORE = 'handles';
-const VERSION = 2;
+const META_STORE = 'meta';
+const VERSION = 3;
+
+export type ImportMeta = {
+	id: string;
+	name: string;
+	diagramType: string;
+	modifiedAt: string;
+};
 
 function openImportDB(): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
@@ -16,6 +24,9 @@ function openImportDB(): Promise<IDBDatabase> {
 			if (!db.objectStoreNames.contains(HANDLE_STORE)) {
 				db.createObjectStore(HANDLE_STORE);
 			}
+			if (!db.objectStoreNames.contains(META_STORE)) {
+				db.createObjectStore(META_STORE, { keyPath: 'id' });
+			}
 		};
 		req.onsuccess = () => resolve(req.result);
 		req.onerror = () => reject(req.error);
@@ -27,8 +38,15 @@ function openImportDB(): Promise<IDBDatabase> {
 export async function saveImport(diagram: DiagramFile): Promise<void> {
 	const db = await openImportDB();
 	return new Promise((resolve, reject) => {
-		const tx = db.transaction(DIAGRAM_STORE, 'readwrite');
+		const tx = db.transaction([DIAGRAM_STORE, META_STORE], 'readwrite');
 		tx.objectStore(DIAGRAM_STORE).put(diagram);
+		const meta: ImportMeta = {
+			id: diagram.id,
+			name: diagram.name,
+			diagramType: diagram.diagramType,
+			modifiedAt: diagram.modifiedAt ?? new Date().toISOString()
+		};
+		tx.objectStore(META_STORE).put(meta);
 		tx.oncomplete = () => resolve();
 		tx.onerror = () => reject(tx.error);
 	});
@@ -48,12 +66,13 @@ export async function loadImport(id: string): Promise<DiagramFile | null> {
 	}
 }
 
-export async function listImports(): Promise<DiagramFile[]> {
+/** Lightweight listing — returns only metadata, NOT full diagram content. */
+export async function listImportMeta(): Promise<ImportMeta[]> {
 	try {
 		const db = await openImportDB();
 		return new Promise((resolve) => {
-			const tx = db.transaction(DIAGRAM_STORE, 'readonly');
-			const req = tx.objectStore(DIAGRAM_STORE).getAll();
+			const tx = db.transaction(META_STORE, 'readonly');
+			const req = tx.objectStore(META_STORE).getAll();
 			req.onsuccess = () => resolve(req.result ?? []);
 			req.onerror = () => resolve([]);
 		});
@@ -66,8 +85,9 @@ export async function removeImport(id: string): Promise<void> {
 	try {
 		const db = await openImportDB();
 		await new Promise<void>((resolve) => {
-			const tx = db.transaction(DIAGRAM_STORE, 'readwrite');
+			const tx = db.transaction([DIAGRAM_STORE, META_STORE], 'readwrite');
 			tx.objectStore(DIAGRAM_STORE).delete(id);
+			tx.objectStore(META_STORE).delete(id);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => resolve();
 		});
@@ -76,7 +96,6 @@ export async function removeImport(id: string): Promise<void> {
 }
 
 // ── File handle links ──────────────────────────────────────────────────
-// FileSystemFileHandle is structured-cloneable and can live in IndexedDB.
 
 export async function saveImportHandle(id: string, handle: FileSystemFileHandle): Promise<void> {
 	try {
@@ -116,7 +135,7 @@ export async function removeImportHandle(id: string): Promise<void> {
 	} catch { /* ignore */ }
 }
 
-/** Returns a map of import ID → linked filename for all IDs that have a handle. */
+/** Returns id → filename for all imports that have a linked file handle. */
 export async function loadAllImportHandleNames(ids: string[]): Promise<Map<string, string>> {
 	const result = new Map<string, string>();
 	for (const id of ids) {

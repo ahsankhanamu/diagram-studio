@@ -2,11 +2,11 @@
 	import { onMount } from 'svelte';
 	import { Trash2, FolderOpen, Link, FileCode } from 'lucide-svelte';
 	import type { DiagramFile } from '$lib/types/diagram';
-	import { listImports, loadAllImportHandleNames } from '$lib/engine/import-cache';
+	import { type ImportMeta, listImportMeta, loadAllImportHandleNames } from '$lib/engine/import-cache';
 
 	interface Props {
 		activeImportId: string;
-		onSwitch: (diagram: DiagramFile) => void;
+		onSwitch: (id: string) => void;
 		onDelete: (id: string) => void;
 		onLinkToFile: (id: string) => void;
 		onOpenFolder: () => void;
@@ -14,11 +14,11 @@
 
 	let { activeImportId, onSwitch, onDelete, onLinkToFile, onOpenFolder }: Props = $props();
 
-	let imports = $state<DiagramFile[]>([]);
+	let imports = $state<ImportMeta[]>([]);
 	let linkedNames = $state<Map<string, string>>(new Map());
 
 	export async function refresh() {
-		const all = await listImports();
+		const all = await listImportMeta();
 		imports = all.sort((a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? ''));
 		linkedNames = await loadAllImportHandleNames(imports.map((d) => d.id));
 	}
@@ -77,14 +77,14 @@
 			{@const isActive = d.id === activeImportId}
 			{@const linkedFile = linkedNames.get(d.id)}
 			<div
-				onclick={() => onSwitch(d)}
+				onclick={() => onSwitch(d.id)}
 				class="group flex cursor-pointer items-start gap-2.5 px-3 py-2 transition-colors"
 				style="background: {isActive ? 'var(--color-hover-overlay)' : 'transparent'};"
 				onmouseenter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-hover-overlay)'; }}
 				onmouseleave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
 				role="treeitem"
 				tabindex="0"
-				onkeydown={(e) => { if (e.key === 'Enter') onSwitch(d); }}
+				onkeydown={(e) => { if (e.key === 'Enter') onSwitch(d.id); }}
 			>
 				<!-- Type dot -->
 				<div

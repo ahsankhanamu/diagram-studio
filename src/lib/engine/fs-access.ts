@@ -93,6 +93,34 @@ export async function clearHandleFromIDB(): Promise<void> {
 	}
 }
 
+export async function saveRootsToIDB(handles: FileSystemDirectoryHandle[]): Promise<void> {
+	try {
+		const db = await openDB();
+		return new Promise((resolve, reject) => {
+			const tx = db.transaction('roots', 'readwrite');
+			const store = tx.objectStore('roots');
+			store.clear();
+			handles.forEach((h, i) => store.put(h, i));
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+		});
+	} catch { /* non-fatal */ }
+}
+
+export async function loadRootsFromIDB(): Promise<FileSystemDirectoryHandle[]> {
+	try {
+		const db = await openDB();
+		return new Promise((resolve) => {
+			const tx = db.transaction('roots', 'readonly');
+			const req = tx.objectStore('roots').getAll();
+			req.onsuccess = () => resolve(req.result ?? []);
+			req.onerror = () => resolve([]);
+		});
+	} catch {
+		return [];
+	}
+}
+
 export async function verifyPermission(
 	handle: FileSystemDirectoryHandle,
 	prompt = false
