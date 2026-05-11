@@ -82,6 +82,22 @@
 		workflow: 'Workflow'
 	};
 
+	// Per-node-type fill colors for thumbnail SVGs
+	const NODE_FILL: Record<string, string> = {
+		process: 'var(--color-node-flowchart, #3b82f6)',
+		decision: 'var(--color-node-decision, #f59e0b)',
+		terminal: 'var(--color-node-terminal, #6b7280)',
+		io: 'var(--color-node-io, #8b5cf6)',
+		document: 'var(--color-node-document, #ef4444)',
+		service: 'var(--color-node-service, #6366f1)',
+		database: 'var(--color-node-database, #10b981)',
+		queue: 'var(--color-node-queue, #f97316)',
+		api: 'var(--color-node-api, #ec4899)',
+		user: 'var(--color-node-user, #14b8a6)',
+		entity: 'var(--color-node-erd, #3b82f6)',
+		workflow: 'var(--color-node-workflow, #06b6d4)',
+	};
+
 	// Simple inline SVG thumbnail showing node layout
 	function renderThumbnail(nodes: DiagramNode[]): string {
 		if (!nodes || nodes.length === 0) return '';
@@ -114,7 +130,8 @@
 			const y = PAD + (n.position.y - minY) * scale;
 			const rw = Math.max(w * scale, 3);
 			const rh = Math.max(h * scale, 2);
-			svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="2" fill="var(--color-accent, #2563eb)" opacity="0.7"/>`;
+			const fill = NODE_FILL[n.type] || 'var(--color-accent, #2563eb)';
+			svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="2" fill="${fill}" opacity="0.8"/>`;
 		}
 		svg += '</svg>';
 		return svg;

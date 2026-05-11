@@ -225,14 +225,14 @@ export const VIEWER_CSS = `
     z-index: 10;
   }
 
-  .dv-mm svg   { display: block; pointer-events: none; opacity: .75; }
+  .dv-mm svg   { display: block; pointer-events: none; opacity: .9; }
   .dv-mm-vp {
     position: absolute;
     border: 2px solid #3b82f6;
-    background: rgba(255,255,255,.15);
+    background: rgba(59,130,246,.08);
     border-radius: 4px;
     pointer-events: none;
-    box-shadow: 0 0 0 9999px rgba(0,0,0,.18);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,.35);
     top: 0; left: 0;
   }
   .dv-empty { padding: 48px; text-align: center; color: #9ca3af; font-size: 14px; }
