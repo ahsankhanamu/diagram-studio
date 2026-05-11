@@ -99,7 +99,7 @@
 			maxX = Math.max(maxX, n.position.x + w);
 			maxY = Math.max(maxY, n.position.y + h);
 		}
-		if (!isFinite(minX)) return '';
+		if (!isFinite(minX)) return '<svg width="120" height="50" xmlns="http://www.w3.org/2000/svg"><rect width="120" height="50" rx="3" fill="var(--color-bg-surface-secondary, #f3f4f6)"/><text x="60" y="28" text-anchor="middle" fill="var(--color-text-muted, #9ca3af)" font-size="10" font-family="sans-serif">No nodes</text></svg>';
 
 		const bbW = maxX - minX || 1;
 		const bbH = maxY - minY || 1;
@@ -207,10 +207,9 @@
 						<p class="truncate text-sm" style="color: var(--color-text-primary);">{item.name}</p>
 						<p class="text-[11px]" style="color: var(--color-text-muted);">{item.fileName}</p>
 					</div>
-					{@const thumb = renderThumbnail(item.diagram.nodes)}
-					{#if thumb}
+					{#if item.diagram.nodes.length > 0}
 						<div class="shrink-0 rounded border overflow-hidden" style="border-color: var(--color-border-subtle); height: 50px;">
-							{@html thumb}
+							{@html renderThumbnail(item.diagram.nodes)}
 						</div>
 					{/if}
 					<span
