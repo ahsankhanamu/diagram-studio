@@ -278,11 +278,16 @@ async function exportDiagramsAsHtml(
   log.appendLine("[export] Posting exportAll to webview…");
   panel.webview.postMessage({
     type: "exportAll",
-    data: { diagrams, title, savePath: saveUri.fsPath },
+    data: { diagrams, title, savePath: saveUri.fsPath, showReorder: true },
   });
 
   const disposable = panel.webview.onDidReceiveMessage(
     async (msg) => {
+      if (msg.type === "exportAllCancel") {
+        disposable.dispose();
+        log.appendLine("[export] Export cancelled by user in reorder dialog");
+        return;
+      }
       if (msg.type !== "exportAllResult") return;
       disposable.dispose();
       log.appendLine("[export] Received exportAllResult from webview");

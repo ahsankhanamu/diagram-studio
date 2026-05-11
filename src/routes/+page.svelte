@@ -91,6 +91,8 @@
 	let showJsonEditor = $state(false);
 	let showExportDialog = $state(false);
 	let exportDialogFiles = $state<Array<{ name: string; fileName: string; diagramType: string; diagram: DiagramFile; checked: boolean }>>([]);
+	let exportDialogVscMode = $state(false);
+	let exportDialogTitle = $state('');
 	// 'imports' = active file is a browser import; number = index into $folderRoots
 	let activeSource = $state<'imports' | number | null>(null);
 	let importModeId = $state('');
@@ -140,14 +142,27 @@
 						setTimeout(() => { suppressDimensionChanges = false; }, 500);
 					});
 				} else if (msg.type === 'exportAll' && msg.data) {
-					const { diagrams, title } = msg.data as { diagrams: DiagramFile[]; title: string };
-					const items: HtmlExportItem[] = diagrams.map((d) => ({
-						diagram: d,
-						nodes: d.nodes,
-						edges: d.edges
-					}));
-					const html = generateMultiDiagramHtml(items, title);
-					postToExtension('exportAllResult', { content: html });
+					const { diagrams, title, showReorder } = msg.data as { diagrams: DiagramFile[]; title: string; showReorder?: boolean };
+					if (showReorder) {
+						exportDialogFiles = diagrams.map((d) => ({
+							name: d.name,
+							fileName: d.name + '.json',
+							diagramType: d.diagramType || 'flowchart',
+							diagram: d,
+							checked: true
+						}));
+						exportDialogTitle = title;
+						exportDialogVscMode = true;
+						showExportDialog = true;
+					} else {
+						const items: HtmlExportItem[] = diagrams.map((d) => ({
+							diagram: d,
+							nodes: d.nodes,
+							edges: d.edges
+						}));
+						const html = generateMultiDiagramHtml(items, title);
+						postToExtension('exportAllResult', { content: html });
+					}
 				}
 			});
 			// Tell the extension we're ready
@@ -787,8 +802,15 @@
 	async function handleDialogExport(selected: DiagramFile[]) {
 		showExportDialog = false;
 		const items: HtmlExportItem[] = selected.map((d) => ({ diagram: d, nodes: d.nodes, edges: d.edges }));
-		const wsName = get(workspaceName) || 'Diagrams';
-		await exportMultiHtml(items, wsName);
+		if (exportDialogVscMode) {
+			const html = generateMultiDiagramHtml(items, exportDialogTitle || 'Diagrams');
+			postToExtension('exportAllResult', { content: html });
+			exportDialogVscMode = false;
+			exportDialogTitle = '';
+		} else {
+			const wsName = get(workspaceName) || 'Diagrams';
+			await exportMultiHtml(items, wsName);
+		}
 	}
 
 	async function handleCopyImage() {
@@ -1112,7 +1134,7 @@
 		<ExportHtmlDialog
 			files={exportDialogFiles}
 			onExport={handleDialogExport}
-			onClose={() => { showExportDialog = false; }}
+			onClose={() => { showExportDialog = false; if (exportDialogVscMode) { postToExtension('exportAllCancel'); exportDialogVscMode = false; exportDialogTitle = ''; } }}
 		/>
 	{/if}
 
