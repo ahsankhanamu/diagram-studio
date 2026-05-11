@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Globe, X, CheckSquare, Square, GripVertical } from 'lucide-svelte';
-	import type { DiagramFile } from '$lib/types/diagram';
+	import type { DiagramFile, DiagramNode } from '$lib/types/diagram';
 
 	interface FileOption {
 		name: string;
@@ -81,6 +81,44 @@
 		erd: 'ERD',
 		workflow: 'Workflow'
 	};
+
+	// Simple inline SVG thumbnail showing node layout
+	function renderThumbnail(nodes: DiagramNode[]): string {
+		if (!nodes || nodes.length === 0) return '';
+		const THUMB_W = 120;
+		const THUMB_H = 50;
+		const PAD = 6;
+
+		let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+		for (const n of nodes) {
+			if (n.type === 'group') continue;
+			const w = n.size?.width ?? 160;
+			const h = n.size?.height ?? 50;
+			minX = Math.min(minX, n.position.x);
+			minY = Math.min(minY, n.position.y);
+			maxX = Math.max(maxX, n.position.x + w);
+			maxY = Math.max(maxY, n.position.y + h);
+		}
+		if (!isFinite(minX)) return '';
+
+		const bbW = maxX - minX || 1;
+		const bbH = maxY - minY || 1;
+		const scale = Math.min((THUMB_W - PAD * 2) / bbW, (THUMB_H - PAD * 2) / bbH);
+
+		let svg = `<svg width="${THUMB_W}" height="${THUMB_H}" xmlns="http://www.w3.org/2000/svg"><rect width="${THUMB_W}" height="${THUMB_H}" rx="3" fill="var(--color-bg-surface-secondary, #f3f4f6)"/>`;
+		for (const n of nodes) {
+			if (n.type === 'group') continue;
+			const w = n.size?.width ?? 160;
+			const h = n.size?.height ?? 50;
+			const x = PAD + (n.position.x - minX) * scale;
+			const y = PAD + (n.position.y - minY) * scale;
+			const rw = Math.max(w * scale, 3);
+			const rh = Math.max(h * scale, 2);
+			svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${rw.toFixed(1)}" height="${rh.toFixed(1)}" rx="2" fill="var(--color-accent, #2563eb)" opacity="0.7"/>`;
+		}
+		svg += '</svg>';
+		return svg;
+	}
 </script>
 
 <!-- Backdrop -->
@@ -92,7 +130,7 @@
 	onkeydown={(e) => { if (e.key === 'Escape') onClose(); }}
 >
 	<div
-		class="flex w-[480px] max-h-[80vh] flex-col rounded-xl border shadow-2xl"
+		class="flex w-[720px] max-h-[85vh] flex-col rounded-xl border shadow-2xl"
 		style="background: var(--color-bg-surface); border-color: var(--color-border-primary);"
 	>
 		<!-- Header -->
@@ -169,6 +207,12 @@
 						<p class="truncate text-sm" style="color: var(--color-text-primary);">{item.name}</p>
 						<p class="text-[11px]" style="color: var(--color-text-muted);">{item.fileName}</p>
 					</div>
+					{@const thumb = renderThumbnail(item.diagram.nodes)}
+					{#if thumb}
+						<div class="shrink-0 rounded border overflow-hidden" style="border-color: var(--color-border-subtle); height: 50px;">
+							{@html thumb}
+						</div>
+					{/if}
 					<span
 						class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium"
 						style="background: var(--color-accent-light); color: var(--color-accent);"
