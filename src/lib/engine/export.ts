@@ -284,6 +284,31 @@ ${navScript}
 </html>`;
 }
 
+// ── Preview HTML (iframe-embedded viewer, no header/padding) ──────────
+export function generatePreviewHtml(diagram: DiagramFile): string {
+	const diagData = JSON.stringify(diagram);
+	// Override canvas height so it fills the iframe; strip border/radius from .dv
+	const previewOverrides = `
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+.dv{border:none!important;border-radius:0!important;height:100%!important;width:100%!important}
+.dv-canvas{height:100vh!important;min-height:0!important}
+`;
+	return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>${VIEWER_CSS}${previewOverrides}</style>
+</head>
+<body>
+${viewerHtml('dv0', null)}
+<script data-diag="dv0" type="application/json">${diagData}<\/script>
+${RENDERER_SCRIPT}
+${VIEWER_SCRIPT}
+</body>
+</html>`;
+}
+
 export async function exportMultiHtml(
 	items: HtmlExportItem[],
 	title: string = 'Diagrams'

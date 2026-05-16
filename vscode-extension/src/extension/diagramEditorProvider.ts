@@ -174,6 +174,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
       `font-src ${webview.cspSource} https://fonts.gstatic.com`,
       `img-src ${webview.cspSource} data:`,
       `connect-src ${webview.cspSource} https://fonts.googleapis.com https://fonts.gstatic.com`,
+      `frame-src blob: 'self'`,
     ].join("; ");
 
     html = html.replace(
