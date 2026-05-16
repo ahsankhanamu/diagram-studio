@@ -132,7 +132,6 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "node build.mjs",
-    "build:ext": "node esbuild.mjs",
     "package": "mkdir -p pkg && rm -f pkg/*.vsix && vsce package --no-dependencies -o pkg/",
     "deploy": "npm run package && cursor --install-extension pkg/*.vsix"
   },
