@@ -2,9 +2,8 @@
   "name": "diagram-studio-vscode",
   "displayName": "Diagram Studio",
   "description": "Visual editor for Diagram Studio JSON diagram files",
-  "version": "0.2.0",
-  "private": true,
-  "publisher": "diagram-studio",
+  "version": "0.2.4",
+  "publisher": "ahsankhanamu",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -13,6 +12,10 @@
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahsankhanamu/diagram-studio"
+  },
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -129,7 +132,8 @@
   "scripts": {
     "build": "node build.mjs",
     "build:ext": "node esbuild.mjs",
-    "package": "node package.mjs"
+    "package": "mkdir -p pkg && rm -f pkg/*.vsix && vsce package --no-dependencies -o pkg/",
+    "deploy": "npm run package && cursor --install-extension pkg/*.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
